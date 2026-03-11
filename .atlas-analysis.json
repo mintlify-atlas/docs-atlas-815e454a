@@ -1,0 +1,118 @@
+{
+  "projectType": "api-service",
+  "projectName": "SOLARE API",
+  "projectDescription": "RESTful API backend for a luxury furniture e-commerce platform with role-based access control, inventory management, and order processing.",
+  "theme": "linden",
+  "primaryColor": "#8B4513",
+  "lightColor": "#D2691E",
+  "darkColor": "#5C3317",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "architecture/overview",
+              "architecture/database-schema",
+              "architecture/authentication",
+              "architecture/roles-permissions"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/testing-with-postman",
+              "guides/user-roles",
+              "guides/error-handling",
+              "guides/response-codes"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Authentication",
+            "pages": [
+              "api/auth/login",
+              "api/auth/register",
+              "api/auth/logout",
+              "api/auth/profile"
+            ]
+          },
+          {
+            "group": "Catalog",
+            "pages": [
+              "api/catalog/categories",
+              "api/catalog/products",
+              "api/catalog/product-details"
+            ]
+          },
+          {
+            "group": "Orders",
+            "pages": [
+              "api/orders/create-order",
+              "api/orders/list-orders"
+            ]
+          },
+          {
+            "group": "Inventory",
+            "pages": [
+              "api/inventory/list-inventory",
+              "api/inventory/update-stock"
+            ]
+          },
+          {
+            "group": "Reports",
+            "pages": [
+              "api/reports/sales-summary",
+              "api/reports/export-pdf"
+            ]
+          },
+          {
+            "group": "Administration",
+            "pages": [
+              "api/admin/dashboard",
+              "api/admin/create-employee",
+              "api/admin/list-roles"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Role-Based Access Control (RBAC) with 5 user types",
+    "Product catalog with variants (material, color, stock)",
+    "Order management with automatic stock deduction",
+    "Inventory tracking with movement audits",
+    "Sales reports with JSON data and PDF export",
+    "Laravel Sanctum/Passport authentication"
+  ],
+  "publicApiSurface": [
+    "POST /api/login",
+    "POST /api/register",
+    "GET /api/categorias",
+    "GET /api/productos",
+    "GET /api/productos/{id}",
+    "POST /api/pedidos",
+    "GET /api/pedidos",
+    "GET /api/inventario",
+    "PUT /api/inventario/{id}",
+    "GET /api/reportes/ventas",
+    "GET /api/reportes/ventas/pdf",
+    "POST /api/admin/crear-empleado",
+    "GET /api/admin/roles"
+  ]
+}
