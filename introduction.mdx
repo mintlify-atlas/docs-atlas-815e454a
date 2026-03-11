@@ -1,0 +1,91 @@
+---
+title: "Introduction"
+description: "Learn about SOLARE API and its core capabilities"
+---
+
+## What is SOLARE API?
+
+SOLARE API is a production-ready RESTful API backend for managing a luxury furniture e-commerce platform. Built with Laravel 12 and PHP 8.2, it provides a complete solution for product management, order processing, inventory control, and business analytics.
+
+## Why SOLARE API?
+
+SOLARE API was designed to solve the unique challenges of luxury furniture retail:
+
+- **Complex Product Variants**: Handle multiple materials, colors, and pricing tiers for each product
+- **Real-time Inventory**: Automatic stock deduction with database triggers and audit trails
+- **Role-Based Security**: Granular access control for different user types (Admin, Manager, Warehouse, Sales, Customer)
+- **Business Intelligence**: Built-in sales reporting with JSON and PDF export capabilities
+- **Enterprise Architecture**: Clean separation of concerns with Laravel best practices
+
+## Core Modules
+
+### Authentication & Authorization
+
+Secure authentication using Laravel Sanctum/Passport with bearer tokens. Five-tier role-based access control system ensures users only access features appropriate to their role.
+
+[Learn about authentication →](/architecture/authentication)
+
+### Product Catalog
+
+Comprehensive product management with categories, variants (material/color combinations), dynamic pricing, and SKU generation. Public endpoints for browsing, authenticated endpoints for management.
+
+[Explore catalog APIs →](/api/catalog/products)
+
+### Order Management
+
+Complete order lifecycle management from cart to fulfillment. Automatic stock validation, transaction-safe order creation, and customer order history.
+
+[View order APIs →](/api/orders/create-order)
+
+### Inventory Control
+
+Real-time inventory tracking with movement audits. Warehouse staff can adjust stock with full traceability. Supports entry, exit, and adjustment operations.
+
+[Check inventory APIs →](/api/inventory/list-inventory)
+
+### Sales Reporting
+
+Generate business intelligence reports with monthly sales trends, top-selling products, and average ticket size. Export to JSON for dashboards or PDF for executive reports.
+
+[See reporting APIs →](/api/reports/sales-summary)
+
+## Technical Stack
+
+- **Framework**: Laravel 12
+- **Language**: PHP 8.2
+- **Database**: MariaDB with custom triggers
+- **Authentication**: Laravel Sanctum & Passport
+- **PDF Generation**: DomPDF
+- **Excel Export**: Maatwebsite Excel
+- **Testing**: Pest PHP
+
+## API Design Principles
+
+SOLARE API follows REST best practices:
+
+- **Resource-oriented URLs**: `/api/productos`, `/api/pedidos`
+- **HTTP methods**: GET for reads, POST for creates, PUT for updates
+- **JSON responses**: Consistent structure with `status` and `data` fields
+- **Bearer authentication**: Standard `Authorization: Bearer {token}` header
+- **Standard status codes**: 200 OK, 201 Created, 401 Unauthorized, 403 Forbidden, 404 Not Found, 422 Validation Error
+
+## Getting Started
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Set up your development environment
+  </Card>
+  <Card title="Quickstart" icon="bolt" href="/quickstart">
+    Make your first API call
+  </Card>
+  <Card title="API Reference" icon="book" href="/api/auth/login">
+    Browse all endpoints
+  </Card>
+  <Card title="Testing Guide" icon="flask" href="/guides/testing-with-postman">
+    Test with Postman
+  </Card>
+</CardGroup>
+
+## Support
+
+For questions and issues, please visit the [GitHub repository](https://github.com/S0l4lr3/solare-backend).

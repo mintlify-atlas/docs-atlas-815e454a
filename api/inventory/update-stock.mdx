@@ -1,0 +1,264 @@
+---
+title: "Update Stock"
+api: "PUT /api/inventario/{id}"
+description: "Manually update the stock level of a product variant with automatic inventory movement tracking."
+---
+
+## Endpoint
+
+```
+PUT /api/inventario/{id}
+```
+
+## Description
+
+This endpoint allows authorized staff to manually adjust the stock level of a specific product variant. All stock changes are tracked in the `MovimientoInventario` table with details including the type of movement, quantity changed, previous and new stock levels, and the user who made the change.
+
+The endpoint supports three types of inventory movements:
+- **entrada**: Add stock (increment)
+- **salida**: Remove stock (decrement)
+- **ajuste**: Set stock to an absolute value
+
+All operations are wrapped in a database transaction to ensure data consistency.
+
+## Authentication
+
+This endpoint requires authentication via Laravel Sanctum token.
+
+**Required Roles:** Warehouse management only
+- Administrador
+- Gerente
+- Almacenista
+
+**Header:**
+```
+Authorization: Bearer {token}
+```
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The unique identifier of the product variant (`variante_producto`) to update
+</ParamField>
+
+## Request Body
+
+<ParamField body="tipo" type="string" required>
+  Type of inventory movement. Must be one of:
+  - `entrada`: Add stock (increases existencias by cantidad)
+  - `salida`: Remove stock (decreases existencias by cantidad)
+  - `ajuste`: Set stock to absolute value (sets existencias to cantidad)
+  
+  **Validation:** Required, must be exactly one of: `entrada`, `salida`, `ajuste`
+</ParamField>
+
+<ParamField body="cantidad" type="integer" required>
+  The quantity to add, remove, or set (depending on tipo).
+  
+  - For `entrada`: Amount to add to current stock
+  - For `salida`: Amount to subtract from current stock
+  - For `ajuste`: New total stock level (absolute value)
+  
+  **Validation:** Required, must be an integer, minimum value of 1
+  
+  **Important:** Stock cannot go below zero. If a `salida` or `ajuste` would result in negative stock, the request will fail with an error.
+</ParamField>
+
+<ParamField body="motivo" type="string" optional>
+  Optional description or reason for the stock change. If not provided, defaults to "Actualización manual de almacén".
+  
+  **Validation:** Optional, must be a string if provided
+</ParamField>
+
+## Response
+
+### Success Response (200)
+
+<ResponseField name="status" type="string" required>
+  Response status indicator ("success" on successful update)
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Success message confirming the inventory update
+</ResponseField>
+
+<ResponseField name="nuevo_stock" type="integer" required>
+  The new stock level after the update
+</ResponseField>
+
+## Example Requests
+
+### Example 1: Add Stock (entrada)
+
+```bash
+curl -X PUT "https://api.solare.com/api/inventario/15" \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "tipo": "entrada",
+    "cantidad": 50,
+    "motivo": "Recepción de nueva mercancía del proveedor"
+  }'
+```
+
+### Example 2: Remove Stock (salida)
+
+```bash
+curl -X PUT "https://api.solare.com/api/inventario/15" \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "tipo": "salida",
+    "cantidad": 10,
+    "motivo": "Producto dañado retirado del inventario"
+  }'
+```
+
+### Example 3: Adjust Stock (ajuste)
+
+```bash
+curl -X PUT "https://api.solare.com/api/inventario/15" \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "tipo": "ajuste",
+    "cantidad": 100,
+    "motivo": "Corrección después de inventario físico"
+  }'
+```
+
+## Example Responses
+
+### Success Response (entrada)
+
+```json
+{
+  "status": "success",
+  "message": "Inventario actualizado correctamente",
+  "nuevo_stock": 170
+}
+```
+
+### Success Response (salida)
+
+```json
+{
+  "status": "success",
+  "message": "Inventario actualizado correctamente",
+  "nuevo_stock": 160
+}
+```
+
+### Success Response (ajuste)
+
+```json
+{
+  "status": "success",
+  "message": "Inventario actualizado correctamente",
+  "nuevo_stock": 100
+}
+```
+
+## Error Responses
+
+### 400 Bad Request - Negative Stock
+
+Returned when the operation would result in negative stock.
+
+```json
+{
+  "status": "error",
+  "message": "El stock no puede ser negativo."
+}
+```
+
+### 401 Unauthorized
+
+Returned when the authentication token is missing or invalid.
+
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
+### 403 Forbidden
+
+Returned when the authenticated user does not have the required role (Administrador, Gerente, or Almacenista).
+
+```json
+{
+  "message": "Forbidden. You do not have permission to access this resource."
+}
+```
+
+### 404 Not Found
+
+Returned when the product variant with the specified ID does not exist.
+
+```json
+{
+  "message": "No query results for model [App\\Models\\VarianteProducto] {id}"
+}
+```
+
+### 422 Unprocessable Entity - Validation Error
+
+Returned when the request body fails validation.
+
+```json
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "tipo": [
+      "The tipo field is required."
+    ],
+    "cantidad": [
+      "The cantidad must be at least 1."
+    ]
+  }
+}
+```
+
+## Business Logic
+
+### Movement Type Behavior
+
+1. **entrada (Entry)**: 
+   - Adds `cantidad` to current stock
+   - Formula: `nuevo_stock = existencias_actual + cantidad`
+   - Creates a movement record with the specified cantidad
+
+2. **salida (Exit)**:
+   - Subtracts `cantidad` from current stock
+   - Formula: `nuevo_stock = existencias_actual - cantidad`
+   - Fails if result would be negative
+   - Creates a movement record with the specified cantidad
+
+3. **ajuste (Adjustment)**:
+   - Sets stock to the exact `cantidad` value
+   - Formula: `nuevo_stock = cantidad`
+   - Records the difference as movement: `|nuevo_stock - existencias_actual|`
+   - Fails if cantidad is less than 0
+
+### Inventory Movement Tracking
+
+Every successful stock update creates a record in `MovimientoInventario` with:
+- `variante_id`: The variant being updated
+- `tipo`: The movement type (entrada/salida/ajuste)
+- `cantidad`: Amount changed (absolute difference for ajuste)
+- `cantidad_anterior`: Stock level before update
+- `cantidad_nueva`: Stock level after update
+- `usuario_id`: ID of the authenticated user making the change
+- `motivo`: Reason for the change (or default message)
+- `fecha_movimiento`: Timestamp of the movement
+
+### Transaction Safety
+
+The entire operation runs in a database transaction, ensuring that:
+- Either both the variant update AND movement record succeed
+- Or both operations are rolled back if any error occurs
+- Data consistency is maintained at all times

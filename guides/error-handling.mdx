@@ -1,0 +1,872 @@
+---
+title: 'Error Handling'
+description: 'Comprehensive guide to error responses, validation errors, and exception handling in the SOLARE API'
+icon: 'triangle-exclamation'
+---
+
+The SOLARE API uses standard HTTP status codes and structured JSON responses to communicate errors. This guide covers all error types, their causes, and how to handle them properly.
+
+## Error Response Format
+
+All errors follow a consistent JSON structure:
+
+```json
+{
+  "message": "Human-readable error description",
+  "status": "error",  // Optional, included in some responses
+  "error": "Technical details"  // Optional, for debugging
+}
+```
+
+<Note>
+  Production deployments should disable detailed error messages in `.env` by setting `APP_DEBUG=false`.
+</Note>
+
+## HTTP Status Codes
+
+The API uses standard HTTP status codes to indicate success or failure:
+
+| Code | Meaning | When Used |
+|------|---------|----------|
+| 200 | OK | Successful GET, PUT requests |
+| 201 | Created | Successful POST (user, order created) |
+| 400 | Bad Request | Invalid request format or business logic error |
+| 401 | Unauthorized | Missing or invalid authentication token |
+| 403 | Forbidden | Valid token but insufficient permissions |
+| 404 | Not Found | Resource doesn't exist |
+| 422 | Unprocessable Entity | Validation failed |
+| 500 | Internal Server Error | Unexpected server error |
+
+See the complete [Response Codes guide](/guides/response-codes) for detailed examples.
+
+## Authentication Errors
+
+### 401 Unauthorized: Missing Token
+
+**Occurs when:** Request to protected endpoint without Authorization header
+
+<CodeGroup>
+```bash Request
+GET /api/profile
+Accept: application/json
+# Missing: Authorization header
+```
+
+```json Response (401)
+{
+  "message": "Unauthenticated."
+}
+```
+</CodeGroup>
+
+**Solution:**
+
+```bash
+GET /api/profile
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGc...
+Accept: application/json
+```
+
+### 401 Unauthorized: Invalid Credentials
+
+**Occurs when:** Login with incorrect email/password
+
+<CodeGroup>
+```json Request
+POST /api/login
+Content-Type: application/json
+
+{
+  "correo": "user@example.com",
+  "contrasena": "wrongpassword"
+}
+```
+
+```json Response (422)
+{
+  "message": "Las credenciales proporcionadas son incorrectas.",
+  "errors": {
+    "correo": [
+      "Las credenciales proporcionadas son incorrectas."
+    ]
+  }
+}
+```
+</CodeGroup>
+
+**Implementation:**
+
+```php
+// app/Http/Controllers/Auth/AuthController.php:127
+if (!$user || !Hash::check($request->contrasena, $user->contrasena)) {
+    throw ValidationException::withMessages([
+        'correo' => ['Las credenciales proporcionadas son incorrectas.'],
+    ]);
+}
+```
+
+<Warning>
+  The API deliberately doesn't distinguish between "user not found" and "wrong password" to prevent email enumeration attacks.
+</Warning>
+
+## Authorization Errors (403 Forbidden)
+
+### Missing Role Assignment
+
+**Occurs when:** User exists but has no role assigned
+
+```json
+{
+  "message": "Sin permisos de acceso"
+}
+```
+
+**Implementation:**
+
+```php
+// app/Http/Middleware/CheckRole.php:21
+if (!$request->user() || !$request->user()->rol) {
+    return response()->json(['message' => 'Sin permisos de acceso'], 403);
+}
+```
+
+### Insufficient Role Permissions
+
+**Occurs when:** User's role doesn't match endpoint requirements
+
+<CodeGroup>
+```bash Request (Customer accessing admin endpoint)
+GET /api/admin/dashboard
+Authorization: Bearer <customer_token>
+```
+
+```json Response (403)
+{
+  "message": "Acceso denegado: Tu rol (Cliente) no tiene permiso para esta acción."
+}
+```
+</CodeGroup>
+
+**Implementation:**
+
+```php
+// app/Http/Middleware/CheckRole.php:26
+if (!in_array($request->user()->rol->nombre, $roles)) {
+    return response()->json([
+        'message' => 'Acceso denegado: Tu rol (' . 
+                    $request->user()->rol->nombre . 
+                    ') no tiene permiso para esta acción.'
+    ], 403);
+}
+```
+
+<Note>
+  The error message includes the user's current role to help with debugging.
+</Note>
+
+### Non-Customer Placing Order
+
+**Occurs when:** Staff member tries to place order without Cliente profile
+
+```json
+{
+  "message": "El usuario no está registrado como cliente"
+}
+```
+
+**Implementation:**
+
+```php
+// app/Http/Controllers/Api/PedidoController.php:28
+$cliente = Cliente::where('usuario_id', $request->user()->id)->first();
+
+if (!$cliente) {
+    return response()->json(['message' => 'El usuario no está registrado como cliente'], 403);
+}
+```
+
+## Validation Errors (422)
+
+Validation errors return detailed field-level feedback:
+
+```json
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "field_name": [
+      "Specific error message 1",
+      "Specific error message 2"
+    ]
+  }
+}
+```
+
+### Registration Validation
+
+<CodeGroup>
+```json Missing Required Fields
+POST /api/register
+Content-Type: application/json
+
+{
+  "nombre": "Juan",
+  "correo": "invalid-email"
+  // Missing: apellido_paterno, contrasena, telefono
+}
+```
+
+```json Response (422)
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "apellido_paterno": [
+      "The apellido paterno field is required."
+    ],
+    "correo": [
+      "The correo must be a valid email address."
+    ],
+    "contrasena": [
+      "The contrasena field is required."
+    ],
+    "telefono": [
+      "The telefono field is required."
+    ]
+  }
+}
+```
+</CodeGroup>
+
+**Validation Rules:**
+
+```php
+// app/Http/Controllers/Auth/AuthController.php:22
+$request->validate([
+    'nombre' => 'required|string|max:100',
+    'apellido_paterno' => 'required|string|max:100',
+    'correo' => 'required|email|unique:usuarios,correo',
+    'contrasena' => 'required|string|min:8|confirmed',
+    'telefono' => 'required|string|max:20',
+]);
+```
+
+### Common Validation Issues
+
+<AccordionGroup>
+  <Accordion title="Email Already Exists">
+    <CodeGroup>
+    ```json Request
+    POST /api/register
+    
+    {
+      "correo": "admin@solare.com",  // Already registered
+      "nombre": "Test",
+      "apellido_paterno": "User",
+      "contrasena": "password123",
+      "contrasena_confirmation": "password123",
+      "telefono": "1234567890"
+    }
+    ```
+    
+    ```json Response (422)
+    {
+      "message": "The given data was invalid.",
+      "errors": {
+        "correo": [
+          "The correo has already been taken."
+        ]
+      }
+    }
+    ```
+    </CodeGroup>
+  </Accordion>
+  
+  <Accordion title="Password Confirmation Mismatch">
+    <CodeGroup>
+    ```json Request
+    POST /api/register
+    
+    {
+      "nombre": "Juan",
+      "apellido_paterno": "Pérez",
+      "correo": "juan@example.com",
+      "contrasena": "password123",
+      "contrasena_confirmation": "password456",  // Doesn't match
+      "telefono": "1234567890"
+    }
+    ```
+    
+    ```json Response (422)
+    {
+      "message": "The given data was invalid.",
+      "errors": {
+        "contrasena": [
+          "The contrasena confirmation does not match."
+        ]
+      }
+    }
+    ```
+    </CodeGroup>
+  </Accordion>
+  
+  <Accordion title="Password Too Short">
+    ```json
+    {
+      "errors": {
+        "contrasena": [
+          "The contrasena must be at least 8 characters."
+        ]
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Invalid Role ID">
+    <CodeGroup>
+    ```json Request
+    POST /api/admin/crear-empleado
+    
+    {
+      "nombre": "Carlos",
+      "apellido_paterno": "García",
+      "correo": "carlos@solare.com",
+      "contrasena": "password123",
+      "contrasena_confirmation": "password123",
+      "rol_id": 999  // Role doesn't exist
+    }
+    ```
+    
+    ```json Response (422)
+    {
+      "errors": {
+        "rol_id": [
+          "The selected rol id is invalid."
+        ]
+      }
+    }
+    ```
+    </CodeGroup>
+  </Accordion>
+</AccordionGroup>
+
+### Order Validation
+
+<CodeGroup>
+```json Invalid Order Structure
+POST /api/pedidos
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "productos": [
+    {
+      "variante_id": 9999,  // Doesn't exist
+      "cantidad": -5        // Negative quantity
+    }
+  ]
+}
+```
+
+```json Response (422)
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "productos.0.variante_id": [
+      "The selected productos.0.variante_id is invalid."
+    ],
+    "productos.0.cantidad": [
+      "The productos.0.cantidad must be at least 1."
+    ]
+  }
+}
+```
+</CodeGroup>
+
+**Validation Rules:**
+
+```php
+// app/Http/Controllers/Api/PedidoController.php:20
+$request->validate([
+    'productos' => 'required|array|min:1',
+    'productos.*.variante_id' => 'required|exists:variantes_producto,id',
+    'productos.*.cantidad' => 'required|integer|min:1',
+    'direccion_id' => 'nullable|exists:direcciones_envio,id',
+]);
+```
+
+### Inventory Update Validation
+
+<CodeGroup>
+```json Invalid Stock Operation
+PUT /api/inventario/12
+Authorization: Bearer <almacenista_token>
+Content-Type: application/json
+
+{
+  "tipo": "invalid_type",  // Must be: entrada, salida, ajuste
+  "cantidad": 0             // Must be at least 1
+}
+```
+
+```json Response (422)
+{
+  "errors": {
+    "tipo": [
+      "The selected tipo is invalid."
+    ],
+    "cantidad": [
+      "The cantidad must be at least 1."
+    ]
+  }
+}
+```
+</CodeGroup>
+
+**Validation Rules:**
+
+```php
+// app/Http/Controllers/Api/InventoryController.php:32
+$request->validate([
+    'tipo' => 'required|in:entrada,salida,ajuste',
+    'cantidad' => 'required|integer|min:1',
+    'motivo' => 'nullable|string'
+]);
+```
+
+## Resource Not Found (404)
+
+### Product Not Found
+
+<CodeGroup>
+```bash Request
+GET /api/productos/9999
+Accept: application/json
+```
+
+```json Response (404)
+{
+  "status": "error",
+  "message": "Producto no encontrado"
+}
+```
+</CodeGroup>
+
+**Implementation:**
+
+```php
+// app/Http/Controllers/Api/ProductoController.php:34
+if (!$producto) {
+    return response()->json([
+        'status' => 'error',
+        'message' => 'Producto no encontrado'
+    ], 404);
+}
+```
+
+### Variant Not Found (Inventory)
+
+```php
+// app/Http/Controllers/Api/InventoryController.php:38
+$variante = VarianteProducto::findOrFail($id);
+// Throws 404 if not found
+```
+
+<CodeGroup>
+```bash Request
+PUT /api/inventario/9999
+```
+
+```json Response (404)
+{
+  "message": "No query results for model [App\\Models\\VarianteProducto] 9999"
+}
+```
+</CodeGroup>
+
+## Business Logic Errors (400)
+
+These errors occur when the request is valid but violates business rules.
+
+### Negative Stock Prevention
+
+<CodeGroup>
+```json Request
+PUT /api/inventario/12
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "tipo": "salida",
+  "cantidad": 1000  // More than available
+}
+```
+
+```json Response (400)
+{
+  "status": "error",
+  "message": "El stock no puede ser negativo."
+}
+```
+</CodeGroup>
+
+**Implementation:**
+
+```php
+// app/Http/Controllers/Api/InventoryController.php:57
+if ($nuevaCantidad < 0) {
+    throw new \Exception("El stock no puede ser negativo.");
+}
+```
+
+### Creating Customer via Admin Endpoint
+
+<CodeGroup>
+```json Request
+POST /api/admin/crear-empleado
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "nombre": "Test",
+  "apellido_paterno": "User",
+  "correo": "test@example.com",
+  "contrasena": "password123",
+  "contrasena_confirmation": "password123",
+  "rol_id": 3  // Cliente role
+}
+```
+
+```json Response (400)
+{
+  "message": "Para crear clientes use la ruta de registro pública"
+}
+```
+</CodeGroup>
+
+**Implementation:**
+
+```php
+// app/Http/Controllers/Auth/AuthController.php:91
+$rolCliente = Rol::where('nombre', 'Cliente')->first();
+if ($request->rol_id == $rolCliente->id) {
+    return response()->json([
+        'message' => 'Para crear clientes use la ruta de registro pública'
+    ], 400);
+}
+```
+
+## Server Errors (500)
+
+These indicate unexpected errors in the application.
+
+### Order Processing Failure
+
+<CodeGroup>
+```json Typical 500 Response
+{
+  "status": "error",
+  "message": "Error al procesar el pedido: SQLSTATE[23000]: Integrity constraint violation..."
+}
+```
+</CodeGroup>
+
+**Implementation:**
+
+```php
+// app/Http/Controllers/Api/PedidoController.php:70
+catch (\Exception $e) {
+    DB::rollBack();
+    return response()->json([
+        'status' => 'error',
+        'message' => 'Error al procesar el pedido: ' . $e->getMessage()
+    ], 500);
+}
+```
+
+<Warning>
+  In production (`APP_DEBUG=false`), detailed error messages are hidden and replaced with generic messages to prevent information disclosure.
+</Warning>
+
+### Registration Transaction Failure
+
+```php
+// app/Http/Controllers/Auth/AuthController.php:61
+catch (\Exception $e) {
+    return response()->json([
+        'message' => 'Error al registrar usuario',
+        'error' => $e->getMessage()
+    ], 500);
+}
+```
+
+## Error Handling Best Practices
+
+### Client-Side Error Handling
+
+<CodeGroup>
+```javascript JavaScript/Fetch
+fetch('http://127.0.0.1:8000/api/pedidos', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  },
+  body: JSON.stringify(orderData)
+})
+.then(response => {
+  if (!response.ok) {
+    return response.json().then(err => {
+      throw err;
+    });
+  }
+  return response.json();
+})
+.then(data => {
+  console.log('Order created:', data.pedido_id);
+})
+.catch(error => {
+  if (error.errors) {
+    // Validation errors (422)
+    Object.keys(error.errors).forEach(field => {
+      console.error(`${field}: ${error.errors[field].join(', ')}`);
+    });
+  } else if (error.message) {
+    // Other errors
+    console.error(error.message);
+  }
+});
+```
+
+```python Python/Requests
+import requests
+
+headers = {
+    'Authorization': f'Bearer {token}',
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+}
+
+try:
+    response = requests.post(
+        'http://127.0.0.1:8000/api/pedidos',
+        json=order_data,
+        headers=headers
+    )
+    response.raise_for_status()
+    
+    data = response.json()
+    print(f"Order ID: {data['pedido_id']}")
+    
+except requests.exceptions.HTTPError as e:
+    error_data = e.response.json()
+    
+    if e.response.status_code == 422:
+        # Validation errors
+        for field, messages in error_data.get('errors', {}).items():
+            print(f"{field}: {', '.join(messages)}")
+    elif e.response.status_code == 403:
+        # Authorization error
+        print(f"Access denied: {error_data['message']}")
+    else:
+        print(f"Error: {error_data.get('message', 'Unknown error')}")
+```
+
+```php PHP/Guzzle
+use GuzzleHttp\Client;
+use GuzzleHttp\Exception\ClientException;
+
+$client = new Client();
+
+try {
+    $response = $client->post('http://127.0.0.1:8000/api/pedidos', [
+        'headers' => [
+            'Authorization' => "Bearer {$token}",
+            'Content-Type' => 'application/json',
+            'Accept' => 'application/json',
+        ],
+        'json' => $orderData
+    ]);
+    
+    $data = json_decode($response->getBody(), true);
+    echo "Order ID: {$data['pedido_id']}";
+    
+} catch (ClientException $e) {
+    $statusCode = $e->getResponse()->getStatusCode();
+    $errorData = json_decode($e->getResponse()->getBody(), true);
+    
+    if ($statusCode === 422) {
+        // Validation errors
+        foreach ($errorData['errors'] as $field => $messages) {
+            echo "{$field}: " . implode(', ', $messages) . "\n";
+        }
+    } else {
+        echo "Error: {$errorData['message']}\n";
+    }
+}
+```
+</CodeGroup>
+
+### Error Response Checklist
+
+When handling errors, always:
+
+<Steps>
+  <Step title="Check HTTP Status Code">
+    Use status code to determine error category (4xx vs 5xx)
+  </Step>
+  
+  <Step title="Parse JSON Response">
+    All errors return JSON, even 500 errors (if `APP_DEBUG=true`)
+  </Step>
+  
+  <Step title="Check for 'errors' Object">
+    422 responses include field-specific validation errors
+  </Step>
+  
+  <Step title="Display User-Friendly Messages">
+    Transform technical errors into actionable user guidance
+  </Step>
+  
+  <Step title="Log Detailed Errors">
+    Preserve full error details for debugging
+  </Step>
+</Steps>
+
+### Retry Logic
+
+<Accordion title="When to Retry Requests">
+  - **500 errors:** Safe to retry after brief delay (3-5 seconds)
+  - **503 Service Unavailable:** Retry with exponential backoff
+  - **429 Too Many Requests:** Respect rate limits, retry after delay
+  
+  **Do NOT retry:**
+  - 400, 422 (fix request first)
+  - 401, 403 (authentication/authorization issue)
+  - 404 (resource doesn't exist)
+</Accordion>
+
+## Testing Error Scenarios
+
+### Postman Tests for Error Handling
+
+```javascript
+// Test: Verify 403 for unauthorized access
+pm.test("Returns 403 for non-admin", function () {
+    pm.response.to.have.status(403);
+    
+    const response = pm.response.json();
+    pm.expect(response.message).to.include("Acceso denegado");
+});
+
+// Test: Verify validation errors
+pm.test("Returns validation errors", function () {
+    pm.response.to.have.status(422);
+    
+    const response = pm.response.json();
+    pm.expect(response).to.have.property('errors');
+    pm.expect(response.errors).to.be.an('object');
+});
+
+// Test: Check error message exists
+pm.test("Error has message", function () {
+    const response = pm.response.json();
+    pm.expect(response).to.have.property('message');
+    pm.expect(response.message).to.be.a('string');
+});
+```
+
+## Debugging Errors
+
+<AccordionGroup>
+  <Accordion title="Enable Debug Mode">
+    In `.env`:
+    ```bash
+    APP_DEBUG=true
+    LOG_LEVEL=debug
+    ```
+    
+    This provides:
+    - Full stack traces in 500 errors
+    - SQL query details
+    - Detailed Laravel error pages
+    
+    <Warning>
+      Always set `APP_DEBUG=false` in production to prevent information disclosure.
+    </Warning>
+  </Accordion>
+  
+  <Accordion title="Check Laravel Logs">
+    Errors are logged to `storage/logs/laravel.log`:
+    
+    ```bash
+    tail -f storage/logs/laravel.log
+    ```
+    
+    Look for:
+    - Exception traces
+    - SQL query errors
+    - Authentication failures
+  </Accordion>
+  
+  <Accordion title="Use Postman Console">
+    View detailed request/response data:
+    1. Open Postman Console (View → Show Postman Console)
+    2. Make your request
+    3. Inspect headers, body, and timing
+  </Accordion>
+  
+  <Accordion title="Test with cURL for Raw Output">
+    ```bash
+    curl -v -X POST http://127.0.0.1:8000/api/login \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json" \
+      -d '{"correo":"test@example.com","contrasena":"wrong"}'
+    ```
+    
+    The `-v` flag shows full HTTP exchange including headers.
+  </Accordion>
+</AccordionGroup>
+
+## Summary
+
+<CardGroup cols={2}>
+  <Card title="Authentication (401)" icon="lock">
+    Missing or invalid token  
+    **Fix:** Include valid Bearer token
+  </Card>
+  
+  <Card title="Authorization (403)" icon="ban">
+    Insufficient role permissions  
+    **Fix:** Login with correct role
+  </Card>
+  
+  <Card title="Validation (422)" icon="circle-exclamation">
+    Invalid request data  
+    **Fix:** Check `errors` object
+  </Card>
+  
+  <Card title="Not Found (404)" icon="question">
+    Resource doesn't exist  
+    **Fix:** Verify resource ID
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Response Codes" icon="code" href="/guides/response-codes">
+    Complete HTTP status code reference
+  </Card>
+  
+  <Card title="User Roles" icon="users-gear" href="/guides/user-roles">
+    Understand permission requirements
+  </Card>
+  
+  <Card title="Testing Guide" icon="flask-vial" href="/guides/testing-with-postman">
+    Test error scenarios in Postman
+  </Card>
+  
+  <Card title="API Reference" icon="book" href="/api/auth/login">
+    See endpoint-specific errors
+  </Card>
+</CardGroup>

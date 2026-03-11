@@ -1,0 +1,209 @@
+---
+title: "List Inventory"
+api: "GET /api/inventario"
+description: "Retrieve a complete list of all product variants with their current stock levels and details."
+---
+
+## Endpoint
+
+```
+GET /api/inventario
+```
+
+## Description
+
+This endpoint returns a detailed inventory list of all product variants (`VarianteProducto`) in the system, including related product and material information. The response includes current stock levels (`existencias`), pricing, SKU information, and active status for each variant.
+
+## Authentication
+
+This endpoint requires authentication via Laravel Sanctum token.
+
+**Required Roles:** Staff members only
+- Administrador
+- Gerente
+- Supervisor
+- Vendedor
+- Almacenista
+
+**Header:**
+```
+Authorization: Bearer {token}
+```
+
+## Request Parameters
+
+This endpoint does not require any parameters.
+
+## Response
+
+### Success Response (200)
+
+<ResponseField name="status" type="string" required>
+  Response status indicator (always "success" on successful requests)
+</ResponseField>
+
+<ResponseField name="data" type="array" required>
+  Array of product variant objects with inventory details
+  
+  <ResponseField name="id" type="integer">
+    Unique identifier for the product variant
+  </ResponseField>
+  
+  <ResponseField name="producto_id" type="integer">
+    Foreign key reference to the parent product
+  </ResponseField>
+  
+  <ResponseField name="material_id" type="integer">
+    Foreign key reference to the material used
+  </ResponseField>
+  
+  <ResponseField name="color" type="string">
+    Color of the product variant
+  </ResponseField>
+  
+  <ResponseField name="precio_adicional" type="decimal">
+    Additional price for this variant (can be 0)
+  </ResponseField>
+  
+  <ResponseField name="existencias" type="integer">
+    Current stock level for this variant
+  </ResponseField>
+  
+  <ResponseField name="sku_especifico" type="string">
+    Specific SKU code for this variant
+  </ResponseField>
+  
+  <ResponseField name="activo" type="boolean">
+    Whether this variant is active (1) or inactive (0)
+  </ResponseField>
+  
+  <ResponseField name="created_at" type="string">
+    Timestamp of when the variant was created
+  </ResponseField>
+  
+  <ResponseField name="updated_at" type="string">
+    Timestamp of the last update
+  </ResponseField>
+  
+  <ResponseField name="producto" type="object">
+    Related product information
+    
+    <ResponseField name="id" type="integer">
+      Product ID
+    </ResponseField>
+    
+    <ResponseField name="nombre" type="string">
+      Product name
+    </ResponseField>
+    
+    <ResponseField name="descripcion" type="string">
+      Product description
+    </ResponseField>
+    
+    <ResponseField name="categoria_id" type="integer">
+      Category ID
+    </ResponseField>
+  </ResponseField>
+  
+  <ResponseField name="material" type="object">
+    Related material information
+    
+    <ResponseField name="id" type="integer">
+      Material ID
+    </ResponseField>
+    
+    <ResponseField name="nombre" type="string">
+      Material name
+    </ResponseField>
+    
+    <ResponseField name="descripcion" type="string">
+      Material description
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X GET "https://api.solare.com/api/inventario" \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9..." \
+  -H "Accept: application/json"
+```
+
+## Example Response
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": 1,
+      "producto_id": 10,
+      "material_id": 3,
+      "color": "Negro",
+      "precio_adicional": "50.00",
+      "existencias": 120,
+      "sku_especifico": "SOL-BLK-L-001",
+      "activo": 1,
+      "created_at": "2026-01-15T10:30:00.000000Z",
+      "updated_at": "2026-03-10T14:22:00.000000Z",
+      "producto": {
+        "id": 10,
+        "nombre": "Panel Solar Monocristalino",
+        "descripcion": "Panel solar de alta eficiencia 400W",
+        "categoria_id": 2
+      },
+      "material": {
+        "id": 3,
+        "nombre": "Silicio Monocristalino",
+        "descripcion": "Material de alta pureza para paneles solares"
+      }
+    },
+    {
+      "id": 2,
+      "producto_id": 10,
+      "material_id": 4,
+      "color": "Azul",
+      "precio_adicional": "0.00",
+      "existencias": 85,
+      "sku_especifico": "SOL-BLU-L-002",
+      "activo": 1,
+      "created_at": "2026-01-15T10:31:00.000000Z",
+      "updated_at": "2026-03-09T09:15:00.000000Z",
+      "producto": {
+        "id": 10,
+        "nombre": "Panel Solar Monocristalino",
+        "descripcion": "Panel solar de alta eficiencia 400W",
+        "categoria_id": 2
+      },
+      "material": {
+        "id": 4,
+        "nombre": "Silicio Policristalino",
+        "descripcion": "Material estándar para paneles solares"
+      }
+    }
+  ]
+}
+```
+
+## Error Responses
+
+### 401 Unauthorized
+
+Returned when the authentication token is missing or invalid.
+
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
+### 403 Forbidden
+
+Returned when the authenticated user does not have the required role (Staff members only).
+
+```json
+{
+  "message": "Forbidden. You do not have permission to access this resource."
+}
+```

@@ -1,0 +1,249 @@
+---
+title: "Create Employee Account"
+api: "POST /api/admin/crear-empleado"
+description: "Create a new employee user account with internal role assignment"
+---
+
+## Overview
+
+This endpoint allows administrators to create user accounts for internal staff members (employees) with specific roles. It is separate from the public registration endpoint and provides role assignment capabilities.
+
+Key features:
+- Create accounts for Administrador, Gerente, Supervisor, Vendedor, or Almacenista roles
+- Prevents creation of Cliente (customer) accounts through this endpoint
+- Validates email uniqueness across the system
+- Requires password confirmation
+
+## Authentication
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token for authentication. User must have the **Administrador** role.
+</ParamField>
+
+<Warning>
+  Only administrators can create employee accounts. This endpoint is not accessible to other roles.
+</Warning>
+
+## Request Body
+
+<ParamField body="nombre" type="string" required>
+  Employee's first name (max 100 characters)
+</ParamField>
+
+<ParamField body="apellido_paterno" type="string" required>
+  Employee's paternal last name (max 100 characters)
+</ParamField>
+
+<ParamField body="apellido_materno" type="string">
+  Employee's maternal last name (max 100 characters, optional)
+</ParamField>
+
+<ParamField body="correo" type="string" required>
+  Employee's email address (must be unique in the system)
+</ParamField>
+
+<ParamField body="contrasena" type="string" required>
+  Password for the account (minimum 8 characters)
+</ParamField>
+
+<ParamField body="contrasena_confirmation" type="string" required>
+  Password confirmation (must match `contrasena`)
+</ParamField>
+
+<ParamField body="rol_id" type="number" required>
+  Role ID to assign to the employee. Must be a valid role ID from the `roles` table.
+  
+  Common role IDs:
+  - 1: Administrador
+  - 2: Gerente
+  - 4: Supervisor
+  - 5: Vendedor
+  - 6: Almacenista
+  
+  Note: Cliente role (typically ID 3) is not allowed via this endpoint.
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Success message: "Cuenta de personal creada exitosamente"
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  Created user object with role information
+  
+  <Expandable title="properties">
+    <ResponseField name="id" type="number">
+      User ID
+    </ResponseField>
+    
+    <ResponseField name="nombre" type="string">
+      Employee's first name
+    </ResponseField>
+    
+    <ResponseField name="apellido_paterno" type="string">
+      Employee's paternal last name
+    </ResponseField>
+    
+    <ResponseField name="apellido_materno" type="string | null">
+      Employee's maternal last name (if provided)
+    </ResponseField>
+    
+    <ResponseField name="correo" type="string">
+      Employee's email address
+    </ResponseField>
+    
+    <ResponseField name="rol_id" type="number">
+      Assigned role ID
+    </ResponseField>
+    
+    <ResponseField name="rol" type="object">
+      Role details
+      
+      <Expandable title="properties">
+        <ResponseField name="id" type="number">
+          Role ID
+        </ResponseField>
+        
+        <ResponseField name="nombre" type="string">
+          Role name (e.g., "Gerente", "Supervisor")
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="creado_en" type="string">
+      Timestamp when the user was created
+    </ResponseField>
+    
+    <ResponseField name="actualizado_en" type="string">
+      Timestamp when the user was last updated
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X POST https://api.solare.com/api/admin/crear-empleado \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "nombre": "Carlos",
+    "apellido_paterno": "Ramirez",
+    "apellido_materno": "Lopez",
+    "correo": "carlos.ramirez@solare.com",
+    "contrasena": "SecurePass123!",
+    "contrasena_confirmation": "SecurePass123!",
+    "rol_id": 2
+  }'
+```
+
+## Example Response
+
+```json
+{
+  "message": "Cuenta de personal creada exitosamente",
+  "user": {
+    "id": 45,
+    "nombre": "Carlos",
+    "apellido_paterno": "Ramirez",
+    "apellido_materno": "Lopez",
+    "correo": "carlos.ramirez@solare.com",
+    "rol_id": 2,
+    "creado_en": "2026-03-11T15:30:00.000000Z",
+    "actualizado_en": "2026-03-11T15:30:00.000000Z",
+    "rol": {
+      "id": 2,
+      "nombre": "Gerente"
+    }
+  }
+}
+```
+
+## Error Responses
+
+### 400 Bad Request - Cliente Role
+
+```json
+{
+  "message": "Para crear clientes use la ruta de registro pública"
+}
+```
+
+Returned when attempting to create a Cliente account through this endpoint. Use the public `/api/register` endpoint instead.
+
+### 401 Unauthorized
+
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
+### 403 Forbidden
+
+```json
+{
+  "message": "No tiene permisos para acceder a este recurso."
+}
+```
+
+Returned when the authenticated user does not have the Administrador role.
+
+### 422 Unprocessable Entity - Validation Errors
+
+```json
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "correo": [
+      "The correo has already been taken."
+    ],
+    "contrasena": [
+      "The contrasena confirmation does not match."
+    ],
+    "rol_id": [
+      "The selected rol id is invalid."
+    ]
+  }
+}
+```
+
+Returned when validation fails. Common validation errors:
+- Email already exists in the system
+- Password and confirmation don't match
+- Password is less than 8 characters
+- Invalid role ID
+- Required fields are missing
+
+## Implementation Notes
+
+- Password is hashed using Laravel's `Hash::make()` before storage
+- Email uniqueness is validated against the `usuarios` table
+- The endpoint prevents creation of Cliente accounts (enforced at `app/Http/Controllers/Auth/AuthController.php:91`)
+- No token is generated for the new employee - they must use `/api/login` to authenticate
+- No Cliente profile record is created (unlike public registration)
+- The response includes the full user object with eager-loaded role relationship
+- Controller location: `app/Http/Controllers/Auth/AuthController.php:80`
+
+## Workflow
+
+1. Administrator authenticates and obtains access token
+2. Administrator calls this endpoint with employee details and desired role
+3. System validates input data:
+   - Checks email uniqueness
+   - Validates password strength and confirmation
+   - Validates role ID exists
+   - Prevents Cliente role assignment
+4. User record is created in `usuarios` table with hashed password
+5. Employee can now log in using `/api/login` with their credentials
+
+## Security Considerations
+
+- Only administrators can create employee accounts
+- Passwords are hashed before storage
+- Email uniqueness prevents duplicate accounts
+- Password confirmation required to prevent typos
+- Cliente accounts cannot be created through this endpoint
+- No automatic token generation - forces proper login flow

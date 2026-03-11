@@ -1,0 +1,119 @@
+---
+title: 'Login'
+api: 'POST /api/login'
+---
+
+Authenticates a user with email and password credentials and returns an access token for subsequent API requests.
+
+## Request Body
+
+<ParamField body="correo" type="string" required>
+  User's email address. Must be a valid email format.
+</ParamField>
+
+<ParamField body="contrasena" type="string" required>
+  User's password.
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Success message indicating successful authentication.
+</ResponseField>
+
+<ResponseField name="access_token" type="string">
+  OAuth access token generated using Laravel Passport. Use this token in the Authorization header for authenticated requests.
+</ResponseField>
+
+<ResponseField name="token_type" type="string">
+  Token type, always "Bearer".
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  Authenticated user information.
+  
+  <ResponseField name="user.id" type="integer">
+    User's unique identifier.
+  </ResponseField>
+  
+  <ResponseField name="user.nombre" type="string">
+    User's first name.
+  </ResponseField>
+  
+  <ResponseField name="user.apellido_paterno" type="string">
+    User's paternal last name.
+  </ResponseField>
+  
+  <ResponseField name="user.correo" type="string">
+    User's email address.
+  </ResponseField>
+  
+  <ResponseField name="user.rol" type="string">
+    User's role name (e.g., "Cliente", "Admin", "Empleado").
+  </ResponseField>
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X POST https://api.solare.com/api/login \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "correo": "usuario@example.com",
+    "contrasena": "password123"
+  }'
+```
+
+## Example Response
+
+```json
+{
+  "message": "Inicio de sesión exitoso",
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...",
+  "token_type": "Bearer",
+  "user": {
+    "id": 1,
+    "nombre": "Juan",
+    "apellido_paterno": "Pérez",
+    "correo": "usuario@example.com",
+    "rol": "Cliente"
+  }
+}
+```
+
+## Error Responses
+
+### Invalid Credentials (422)
+
+```json
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "correo": [
+      "Las credenciales proporcionadas son incorrectas."
+    ]
+  }
+}
+```
+
+### Validation Error (422)
+
+```json
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "correo": [
+      "The correo field is required.",
+      "The correo must be a valid email address."
+    ],
+    "contrasena": [
+      "The contrasena field is required."
+    ]
+  }
+}
+```
+
+<Note>
+  The access token should be included in subsequent API requests using the Authorization header: `Authorization: Bearer {access_token}`
+</Note>

@@ -1,0 +1,625 @@
+---
+title: 'User Roles & Permissions'
+description: 'Detailed explanation of each role in the SOLARE API and their access capabilities'
+icon: 'users-gear'
+---
+
+The SOLARE API implements Role-Based Access Control (RBAC) to secure resources and ensure users can only access functionality appropriate to their responsibilities.
+
+## Overview
+
+The system defines **6 distinct roles**, each with specific permissions enforced through the `CheckRole` middleware.
+
+<Note>
+  All authenticated endpoints require a valid Bearer token obtained through login or registration.
+</Note>
+
+## Role Architecture
+
+Roles are stored in the `roles` table and linked to users through the `rol_id` foreign key:
+
+```php
+// From routes/api.php
+Route::middleware('role:Administrador,Gerente')->group(function () {
+    // Only Administrador and Gerente can access these routes
+});
+```
+
+### How Role Checking Works
+
+The `CheckRole` middleware validates access on every request:
+
+```php
+// app/Http/Middleware/CheckRole.php:19
+public function handle(Request $request, Closure $next, ...$roles): Response
+{
+    if (!$request->user() || !$request->user()->rol) {
+        return response()->json(['message' => 'Sin permisos de acceso'], 403);
+    }
+
+    if (!in_array($request->user()->rol->nombre, $roles)) {
+        return response()->json([
+            'message' => 'Acceso denegado: Tu rol (' . 
+                        $request->user()->rol->nombre . 
+                        ') no tiene permiso para esta acción.'
+        ], 403);
+    }
+
+    return $next($request);
+}
+```
+
+## Role Definitions
+
+### 1. Administrador (Administrator)
+
+<Card title="Full System Access" icon="user-crown" iconType="solid">
+  The highest privilege level with complete control over the system.
+</Card>
+
+**Capabilities:**
+
+- Create, view, and manage employee accounts
+- Access all inventory management functions
+- View and export all reports
+- Manage system configuration
+- Access admin dashboard
+- All customer capabilities
+
+**Exclusive Endpoints:**
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/admin/dashboard` | GET | Administrative dashboard data |
+| `/admin/roles` | GET | List all available roles |
+| `/admin/crear-empleado` | POST | Create staff accounts |
+
+**Example Usage:**
+
+<CodeGroup>
+```bash Login as Admin
+curl -X POST http://127.0.0.1:8000/api/login \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "correo": "admin@solare.com",
+    "contrasena": "password123"
+  }'
+```
+
+```bash Create Employee
+curl -X POST http://127.0.0.1:8000/api/admin/crear-empleado \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "nombre": "Carlos",
+    "apellido_paterno": "García",
+    "correo": "carlos.garcia@solare.com",
+    "contrasena": "SecurePass123",
+    "contrasena_confirmation": "SecurePass123",
+    "rol_id": 5
+  }'
+```
+</CodeGroup>
+
+<Warning>
+  Administrators **cannot** create customer accounts via `/admin/crear-empleado`. Customers must register through the public `/register` endpoint.
+</Warning>
+
+### 2. Gerente (Manager)
+
+<Card title="Management Level Access" icon="user-tie" iconType="solid">
+  Operational management with inventory and reporting capabilities.
+</Card>
+
+**Capabilities:**
+
+- View complete inventory
+- Modify stock levels (add/remove/adjust)
+- Access sales reports and analytics
+- Export PDF reports
+- View dashboard statistics
+
+**Shared Access:**
+
+| Endpoint Group | Permissions |
+|----------------|-------------|
+| Inventory | `GET /inventario`, `PUT /inventario/{id}` |
+| Reports | `GET /reportes/ventas`, `GET /reportes/ventas/pdf` |
+
+**Example: View Sales Report**
+
+```json
+GET /api/reportes/ventas
+Authorization: Bearer <gerente_token>
+Accept: application/json
+
+# Response
+{
+  "status": "success",
+  "data": {
+    "resumen": {
+      "total_ingresos": 1250000.00,
+      "total_pedidos": 45,
+      "ticket_promedio": 27777.78
+    },
+    "grafica_ventas": [...],
+    "top_productos": [...]
+  }
+}
+```
+
+### 3. Supervisor
+
+<Card title="Supervisory Access" icon="user-shield" iconType="solid">
+  Oversight role with read access to inventory and reports.
+</Card>
+
+**Capabilities:**
+
+- **View** inventory (read-only)
+- Access sales reports (JSON only)
+- No stock modification rights
+
+**Restrictions:**
+
+<Warning>
+  Supervisors can view inventory but **cannot** modify stock levels. `PUT /inventario/{id}` will return 403 Forbidden.
+</Warning>
+
+**Route Configuration:**
+
+```php
+// routes/api.php:35 - View only
+Route::middleware('role:Administrador,Gerente,Supervisor,Vendedor,Almacenista')
+    ->group(function () {
+        Route::get('/inventario', [InventoryController::class, 'index']);
+    });
+
+// routes/api.php:40 - Modify access (Supervisor NOT included)
+Route::middleware('role:Administrador,Gerente,Almacenista')
+    ->group(function () {
+        Route::put('/inventario/{id}', [InventoryController::class, 'updateStock']);
+    });
+```
+
+### 4. Vendedor (Salesperson)
+
+<Card title="Sales Support" icon="user-tag" iconType="solid">
+  Customer-facing role with inventory visibility.
+</Card>
+
+**Capabilities:**
+
+- View inventory to answer customer questions
+- Check product availability
+- No modification rights
+
+**Use Case:**
+
+Salespersons can check real-time stock before promising delivery:
+
+```json
+GET /api/inventario
+Authorization: Bearer <vendedor_token>
+
+# View stock for all product variants
+{
+  "status": "success",
+  "data": [
+    {
+      "id": 12,
+      "color": "Gris Perla",
+      "existencias": 8,
+      "producto": {
+        "nombre": "Sofá Moderno Capitoné"
+      }
+    }
+  ]
+}
+```
+
+### 5. Almacenista (Warehouse Staff)
+
+<Card title="Inventory Management" icon="warehouse" iconType="solid">
+  Operational role focused on stock management.
+</Card>
+
+**Capabilities:**
+
+- View complete inventory
+- **Add** stock (receiving shipments)
+- **Remove** stock (damage, loss)
+- **Adjust** stock (inventory audits)
+- All movements are logged with user ID and reason
+
+**Stock Operations:**
+
+<CodeGroup>
+```json Entrada (Add Stock)
+PUT /api/inventario/12
+Authorization: Bearer <almacenista_token>
+Content-Type: application/json
+
+{
+  "tipo": "entrada",
+  "cantidad": 50,
+  "motivo": "Recepción de proveedor ABC"
+}
+
+# Increases existencias by 50
+```
+
+```json Salida (Remove Stock)
+PUT /api/inventario/12
+
+{
+  "tipo": "salida",
+  "cantidad": 3,
+  "motivo": "Productos dañados en transporte"
+}
+
+# Decreases existencias by 3
+```
+
+```json Ajuste (Set Absolute)
+PUT /api/inventario/12
+
+{
+  "tipo": "ajuste",
+  "cantidad": 100,
+  "motivo": "Auditoría física - corrección"
+}
+
+# Sets existencias to exactly 100
+```
+</CodeGroup>
+
+**Audit Trail:**
+
+Every stock change creates a record:
+
+```php
+// app/Http/Controllers/Api/InventoryController.php:65
+MovimientoInventario::create([
+    'variante_id' => $variante->id,
+    'tipo' => $request->tipo,
+    'cantidad' => $request->cantidad,
+    'cantidad_anterior' => $cantidadAnterior,
+    'cantidad_nueva' => $nuevaCantidad,
+    'usuario_id' => $request->user()->id,
+    'motivo' => $request->motivo ?? 'Actualización manual de almacén'
+]);
+```
+
+<Note>
+  The system prevents negative stock. Attempting to remove more than available returns a 400 error.
+</Note>
+
+### 6. Cliente (Customer)
+
+<Card title="Customer Access" icon="user" iconType="solid">
+  Public-facing role for end customers.
+</Card>
+
+**Capabilities:**
+
+- Register via public endpoint
+- Browse products and categories
+- Place orders
+- View own order history
+- No access to inventory or admin functions
+
+**Registration Flow:**
+
+```php
+// app/Http/Controllers/Auth/AuthController.php:31
+return DB::transaction(function () use ($request) {
+    // 1. Find Cliente role
+    $rolCliente = Rol::where('nombre', 'Cliente')->first();
+    
+    // 2. Create User
+    $user = User::create([
+        'nombre' => $request->nombre,
+        'apellido_paterno' => $request->apellido_paterno,
+        'correo' => $request->correo,
+        'contrasena' => Hash::make($request->contrasena),
+        'rol_id' => $rolCliente->id ?? 3
+    ]);
+    
+    // 3. Create Cliente profile
+    Cliente::create([
+        'usuario_id' => $user->id,
+        'telefono' => $request->telefono
+    ]);
+    
+    return response()->json([...], 201);
+});
+```
+
+**Order Placement:**
+
+<CodeGroup>
+```json Create Order
+POST /api/pedidos
+Authorization: Bearer <customer_token>
+Content-Type: application/json
+
+{
+  "productos": [
+    {
+      "variante_id": 12,
+      "cantidad": 2
+    }
+  ],
+  "direccion_id": 5,
+  "notas": "Llamar antes de entregar"
+}
+```
+
+```json Success Response
+{
+  "status": "success",
+  "message": "Pedido creado exitosamente",
+  "pedido_id": 42
+}
+```
+
+```json Error: Not a Customer
+{
+  "message": "El usuario no está registrado como cliente"
+}
+```
+</CodeGroup>
+
+<Warning>
+  If a logged-in admin tries to place an order without a Cliente profile, they'll receive a 403 error. Admins must create a separate customer account if they want to test order placement.
+</Warning>
+
+## Role Access Matrix
+
+| Feature | Admin | Gerente | Supervisor | Vendedor | Almacenista | Cliente |
+|---------|:-----:|:-------:|:----------:|:--------:|:-----------:|:-------:|
+| Browse Catalog | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Place Orders | ✅* | ❌ | ❌ | ❌ | ❌ | ✅ |
+| View Orders | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ (own) |
+| View Inventory | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Modify Stock | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| View Reports | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Export PDF | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Create Employees | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Admin Dashboard | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+
+*Admin needs Cliente profile
+
+## Testing Role Permissions
+
+<Steps>
+  <Step title="Login with Different Roles">
+    Use the provided test credentials or create accounts with specific roles.
+  </Step>
+  
+  <Step title="Save Role-Specific Tokens">
+    In Postman, create environment variables like `admin_token`, `customer_token`, etc.
+  </Step>
+  
+  <Step title="Test Authorization Boundaries">
+    Try accessing restricted endpoints to verify 403 responses.
+  </Step>
+</Steps>
+
+### Example: Test Role Restriction
+
+<CodeGroup>
+```bash Customer Attempts Admin Endpoint
+# Login as customer
+curl -X POST http://127.0.0.1:8000/api/login \
+  -d '{"correo": "cliente@solare.com", "contrasena": "password123"}'
+
+# Try to access admin endpoint
+curl -X GET http://127.0.0.1:8000/api/admin/dashboard \
+  -H "Authorization: Bearer <customer_token>"
+```
+
+```json Expected Response (403)
+{
+  "message": "Acceso denegado: Tu rol (Cliente) no tiene permiso para esta acción."
+}
+```
+</CodeGroup>
+
+## Endpoint Authorization Reference
+
+### Public Endpoints (No Auth Required)
+
+```php
+// routes/api.php:8-14
+POST   /api/login
+POST   /api/register
+GET    /api/categorias
+GET    /api/productos
+GET    /api/productos/{id}
+```
+
+### Authenticated Endpoints (Any Logged-In User)
+
+```php
+// routes/api.php:17-19
+POST   /api/logout
+GET    /api/profile
+```
+
+### Customer + Admin
+
+```php
+// routes/api.php:21-23
+GET    /api/pedidos        # View orders
+POST   /api/pedidos        # Create order
+```
+
+### Admin Only
+
+```php
+// routes/api.php:26-32
+GET    /api/admin/dashboard
+GET    /api/admin/roles
+POST   /api/admin/crear-empleado
+```
+
+### Staff (View Inventory)
+
+```php
+// routes/api.php:35-37
+GET    /api/inventario
+# Roles: Administrador, Gerente, Supervisor, Vendedor, Almacenista
+```
+
+### Warehouse Management
+
+```php
+// routes/api.php:40-42
+PUT    /api/inventario/{id}
+# Roles: Administrador, Gerente, Almacenista
+```
+
+### Management Reports
+
+```php
+// routes/api.php:45-48
+GET    /api/reportes/ventas
+GET    /api/reportes/ventas/pdf
+# Roles: Administrador, Gerente, Supervisor
+```
+
+## Role Assignment
+
+### For Customers
+
+Automatically assigned during registration:
+
+```php
+// Automatic Cliente assignment
+$rolCliente = Rol::where('nombre', 'Cliente')->first();
+$user->rol_id = $rolCliente->id ?? 3;
+```
+
+### For Staff
+
+Manually assigned by administrators:
+
+```json
+POST /api/admin/crear-empleado
+
+{
+  "nombre": "Employee Name",
+  "correo": "employee@solare.com",
+  "contrasena": "password",
+  "contrasena_confirmation": "password",
+  "rol_id": 2  // Specify role ID (2 = Gerente, 5 = Vendedor, etc.)
+}
+```
+
+**Available Role IDs:**
+
+```json
+[
+  {"id": 1, "nombre": "Administrador"},
+  {"id": 2, "nombre": "Gerente"},
+  {"id": 3, "nombre": "Cliente"},
+  {"id": 4, "nombre": "Supervisor"},
+  {"id": 5, "nombre": "Vendedor"},
+  {"id": 6, "nombre": "Almacenista"}
+]
+```
+
+<Warning>
+  Administrators cannot create Cliente accounts via `/admin/crear-empleado`. Attempting to do so returns:
+  ```json
+  {"message": "Para crear clientes use la ruta de registro pública"}
+  ```
+</Warning>
+
+## Security Considerations
+
+<AccordionGroup>
+  <Accordion title="Role Verification on Every Request">
+    The middleware checks user roles on **every single request** to protected endpoints. There is no role caching or bypass mechanism.
+    
+    ```php
+    // Middleware executes before controller
+    Route::middleware('role:Admin')->group(function () {
+        // CheckRole::handle() validates BEFORE controller runs
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Token-Based Authentication">
+    Roles are tied to the authenticated user via the Bearer token. If a user's role changes in the database:
+    
+    - Existing tokens **remain valid** with old permissions
+    - User must **logout and login** again to get new role permissions
+    - Consider implementing token refresh mechanisms for production
+  </Accordion>
+  
+  <Accordion title="Database-Driven Permissions">
+    All roles are stored in the database, not hardcoded:
+    
+    ```php
+    // Dynamic role lookup
+    $request->user()->rol->nombre  // "Administrador", "Cliente", etc.
+    ```
+    
+    This allows for potential future enhancements like custom roles or permission management UI.
+  </Accordion>
+</AccordionGroup>
+
+## Common Role Errors
+
+<AccordionGroup>
+  <Accordion title="403: Sin permisos de acceso">
+    **Cause:** User is not authenticated or doesn't have a role assigned
+    
+    **Solution:**
+    - Verify Bearer token is included in Authorization header
+    - Check that user exists in database with valid `rol_id`
+    - Ensure `/profile` endpoint returns user with `rol` object
+  </Accordion>
+  
+  <Accordion title="403: Acceso denegado: Tu rol (X) no tiene permiso">
+    **Cause:** User is authenticated but role lacks required permissions
+    
+    **Solution:**
+    - Review the endpoint's required roles in this guide
+    - Login with an account that has appropriate role
+    - For testing, use the provided test credentials
+  </Accordion>
+  
+  <Accordion title="El usuario no está registrado como cliente">
+    **Cause:** Trying to place order with non-customer account
+    
+    **Solution:**
+    - Orders require a `Cliente` profile linked to the user
+    - Admins/staff must register separately as customers
+    - Check `clientes` table for `usuario_id` entry
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Testing with Postman" icon="flask-vial" href="/guides/testing-with-postman">
+    Test role-based access in Postman
+  </Card>
+  
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle authorization errors properly
+  </Card>
+  
+  <Card title="API Reference" icon="book" href="/api/auth/login">
+    See required roles for each endpoint
+  </Card>
+  
+  <Card title="Authentication" icon="key" href="/api/auth/login">
+    Learn about token management
+  </Card>
+</CardGroup>

@@ -1,0 +1,131 @@
+---
+title: 'Create Order'
+api: 'POST /api/pedidos'
+description: 'Create a new order with automatic stock deduction'
+---
+
+## Authentication
+
+This endpoint requires authentication with the **Cliente** role.
+
+## Request Body
+
+<ParamField body="productos" type="array" required>
+  Array of products to order. Must contain at least one product.
+  
+  <Expandable title="Product Object">
+    <ParamField body="variante_id" type="integer" required>
+      ID of the product variant. Must exist in the `variantes_producto` table.
+    </ParamField>
+    
+    <ParamField body="cantidad" type="integer" required>
+      Quantity to order. Minimum value: 1.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField body="direccion_id" type="integer">
+  ID of the shipping address. Must exist in the `direcciones_envio` table. If not provided, the order will be created without a shipping address.
+</ParamField>
+
+<ParamField body="notas" type="string">
+  Optional notes or comments for the order.
+</ParamField>
+
+## Response Fields
+
+<ResponseField name="status" type="string">
+  Status of the operation. Returns `"success"` on successful order creation.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Success message describing the operation result.
+</ResponseField>
+
+<ResponseField name="pedido_id" type="integer">
+  The ID of the newly created order.
+</ResponseField>
+
+## Transaction Handling
+
+This endpoint uses database transactions to ensure data integrity:
+
+1. Creates the order header with status:
+   - `estado_pago`: "pendiente" (payment pending)
+   - `estado_envio`: "procesando" (processing)
+2. Creates order details for each product
+3. **Automatically deducts stock** via database trigger when order details are inserted
+4. Commits the transaction if all operations succeed
+5. Rolls back all changes if any error occurs
+
+The pricing is calculated as: `producto.precio_base + variante.precio_adicional`
+
+## Example Request
+
+```bash
+curl -X POST https://api.solare.com/api/pedidos \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "productos": [
+      {
+        "variante_id": 1,
+        "cantidad": 2
+      },
+      {
+        "variante_id": 5,
+        "cantidad": 1
+      }
+    ],
+    "direccion_id": 3,
+    "notas": "Por favor entregar antes del mediodía"
+  }'
+```
+
+## Example Response
+
+```json
+{
+  "status": "success",
+  "message": "Pedido creado exitosamente",
+  "pedido_id": 42
+}
+```
+
+## Error Responses
+
+### 403 Forbidden - User Not Registered as Cliente
+
+```json
+{
+  "message": "El usuario no está registrado como cliente"
+}
+```
+
+### 422 Unprocessable Entity - Validation Error
+
+```json
+{
+  "message": "The productos field is required.",
+  "errors": {
+    "productos": [
+      "The productos field is required."
+    ]
+  }
+}
+```
+
+### 500 Internal Server Error - Processing Error
+
+```json
+{
+  "status": "error",
+  "message": "Error al procesar el pedido: [error details]"
+}
+```
+
+Common causes for 500 errors:
+- Insufficient stock for the requested quantity
+- Invalid variant ID
+- Database constraint violations
+- Transaction rollback due to trigger failures

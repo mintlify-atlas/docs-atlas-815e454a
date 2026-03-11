@@ -1,0 +1,943 @@
+---
+title: 'HTTP Response Codes'
+description: 'Complete reference of HTTP status codes used by the SOLARE API with examples'
+icon: 'code'
+---
+
+The SOLARE API uses standard HTTP status codes to indicate the success or failure of requests. This guide provides a comprehensive reference with real examples from the API.
+
+## Status Code Categories
+
+| Range | Category | Meaning |
+|-------|----------|----------|
+| 2xx | Success | Request was successful |
+| 4xx | Client Error | Problem with the request |
+| 5xx | Server Error | Problem on the server |
+
+<Note>
+  All responses include JSON bodies with additional context. Never rely solely on status codes.
+</Note>
+
+## Success Responses (2xx)
+
+### 200 OK
+
+**Meaning:** Request succeeded and returned data
+
+**Used for:**
+- GET requests that return data
+- Successful authentication (login)
+- Successful updates (PUT)
+
+<CodeGroup>
+```json GET Products (200 OK)
+GET /api/productos
+
+{
+  "status": "success",
+  "data": [
+    {
+      "id": 5,
+      "nombre": "Sofá Moderno Capitoné",
+      "precio_base": 25000.00,
+      "categoria": {"nombre": "Salas"},
+      "variantes": [...]
+    }
+  ]
+}
+```
+
+```json Login Success (200 OK)
+POST /api/login
+
+{
+  "message": "Inicio de sesión exitoso",
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+  "token_type": "Bearer",
+  "user": {
+    "id": 1,
+    "nombre": "Admin",
+    "correo": "admin@solare.com",
+    "rol": "Administrador"
+  }
+}
+```
+
+```json Update Stock (200 OK)
+PUT /api/inventario/12
+
+{
+  "status": "success",
+  "message": "Inventario actualizado correctamente",
+  "nuevo_stock": 108
+}
+```
+
+```json Get Profile (200 OK)
+GET /api/profile
+
+{
+  "id": 15,
+  "nombre": "Juan",
+  "apellido_paterno": "Pérez",
+  "correo": "juan@example.com",
+  "rol": {
+    "id": 3,
+    "nombre": "Cliente"
+  }
+}
+```
+</CodeGroup>
+
+**Implementation Examples:**
+
+```php
+// app/Http/Controllers/Api/ProductoController.php:20
+return response()->json([
+    'status' => 'success',
+    'data' => $productos
+], 200);
+
+// app/Http/Controllers/Auth/AuthController.php:136
+return response()->json([
+    'message' => 'Inicio de sesión exitoso',
+    'access_token' => $token,
+    'token_type' => 'Bearer',
+    'user' => [...]
+]);
+```
+
+### 201 Created
+
+**Meaning:** Resource successfully created
+
+**Used for:**
+- User registration
+- Order placement
+- Employee account creation
+
+<CodeGroup>
+```json Register User (201 Created)
+POST /api/register
+
+{
+  "message": "Usuario registrado exitosamente como Cliente",
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+  "token_type": "Bearer",
+  "user": {
+    "id": 15,
+    "nombre": "Juan",
+    "apellido_paterno": "Pérez",
+    "correo": "juan.perez@example.com",
+    "rol": {
+      "id": 3,
+      "nombre": "Cliente"
+    }
+  }
+}
+```
+
+```json Create Order (201 Created)
+POST /api/pedidos
+
+{
+  "status": "success",
+  "message": "Pedido creado exitosamente",
+  "pedido_id": 42
+}
+```
+
+```json Create Employee (201 Created)
+POST /api/admin/crear-empleado
+
+{
+  "message": "Cuenta de personal creada exitosamente",
+  "user": {
+    "id": 20,
+    "nombre": "María",
+    "apellido_paterno": "López",
+    "correo": "maria.lopez@solare.com",
+    "rol": {
+      "id": 6,
+      "nombre": "Almacenista"
+    }
+  }
+}
+```
+</CodeGroup>
+
+**Implementation Examples:**
+
+```php
+// app/Http/Controllers/Auth/AuthController.php:54
+return response()->json([
+    'message' => 'Usuario registrado exitosamente como Cliente',
+    'access_token' => $token,
+    'token_type' => 'Bearer',
+    'user' => $user->load('rol')
+], 201);
+
+// app/Http/Controllers/Api/PedidoController.php:64
+return response()->json([
+    'status' => 'success',
+    'message' => 'Pedido creado exitosamente',
+    'pedido_id' => $pedido->id
+], 201);
+```
+
+<Note>
+  201 responses often include a resource identifier (like `pedido_id`) to reference the newly created item.
+</Note>
+
+## Client Errors (4xx)
+
+### 400 Bad Request
+
+**Meaning:** Invalid request or business logic violation
+
+**Used for:**
+- Business rule violations
+- Invalid stock operations
+- Attempting to create customers via admin endpoint
+
+<CodeGroup>
+```json Negative Stock (400)
+PUT /api/inventario/12
+Body: {"tipo": "salida", "cantidad": 1000}
+
+Response:
+{
+  "status": "error",
+  "message": "El stock no puede ser negativo."
+}
+```
+
+```json Wrong Customer Creation Route (400)
+POST /api/admin/crear-empleado
+Body: {"rol_id": 3, ...}  // 3 = Cliente
+
+Response:
+{
+  "message": "Para crear clientes use la ruta de registro pública"
+}
+```
+</CodeGroup>
+
+**Implementation Examples:**
+
+```php
+// app/Http/Controllers/Api/InventoryController.php:57
+if ($nuevaCantidad < 0) {
+    throw new \Exception("El stock no puede ser negativo.");
+}
+
+// app/Http/Controllers/Auth/AuthController.php:92
+if ($request->rol_id == $rolCliente->id) {
+    return response()->json([
+        'message' => 'Para crear clientes use la ruta de registro pública'
+    ], 400);
+}
+```
+
+### 401 Unauthorized
+
+**Meaning:** Authentication required but missing or invalid
+
+**Used for:**
+- Missing Authorization header
+- Invalid/expired token
+- Incorrect credentials
+
+<CodeGroup>
+```json Missing Token (401)
+GET /api/profile
+# Missing: Authorization header
+
+Response:
+{
+  "message": "Unauthenticated."
+}
+```
+
+```json Invalid Token (401)
+GET /api/profile
+Authorization: Bearer invalid_token_here
+
+Response:
+{
+  "message": "Unauthenticated."
+}
+```
+
+```json Wrong Credentials (422, not 401)
+POST /api/login
+Body: {"correo": "user@example.com", "contrasena": "wrong"}
+
+Response:
+{
+  "message": "Las credenciales proporcionadas son incorrectas.",
+  "errors": {
+    "correo": [
+      "Las credenciales proporcionadas son incorrectas."
+    ]
+  }
+}
+```
+</CodeGroup>
+
+**Implementation:**
+
+```php
+// Laravel Sanctum automatically handles 401 responses
+// When token is missing or invalid
+Route::middleware('auth:sanctum')->group(function () {
+    // Protected routes
+});
+
+// app/Http/Controllers/Auth/AuthController.php:127
+if (!$user || !Hash::check($request->contrasena, $user->contrasena)) {
+    throw ValidationException::withMessages([
+        'correo' => ['Las credenciales proporcionadas son incorrectas.'],
+    ]);
+}
+```
+
+<Warning>
+  Note that incorrect login credentials return **422** (validation error) rather than 401, following Laravel convention.
+</Warning>
+
+### 403 Forbidden
+
+**Meaning:** Authenticated but lacking required permissions
+
+**Used for:**
+- Insufficient role permissions
+- Missing role assignment
+- Non-customer trying to place order
+
+<CodeGroup>
+```json Role Not Allowed (403)
+GET /api/admin/dashboard
+Authorization: Bearer <customer_token>
+
+Response:
+{
+  "message": "Acceso denegado: Tu rol (Cliente) no tiene permiso para esta acción."
+}
+```
+
+```json No Role Assigned (403)
+GET /api/inventario
+Authorization: Bearer <token_without_role>
+
+Response:
+{
+  "message": "Sin permisos de acceso"
+}
+```
+
+```json Not a Customer (403)
+POST /api/pedidos
+Authorization: Bearer <admin_token>  // Admin without Cliente profile
+
+Response:
+{
+  "message": "El usuario no está registrado como cliente"
+}
+```
+</CodeGroup>
+
+**Implementation:**
+
+```php
+// app/Http/Middleware/CheckRole.php:21
+if (!$request->user() || !$request->user()->rol) {
+    return response()->json(['message' => 'Sin permisos de acceso'], 403);
+}
+
+if (!in_array($request->user()->rol->nombre, $roles)) {
+    return response()->json([
+        'message' => 'Acceso denegado: Tu rol (' . 
+                    $request->user()->rol->nombre . 
+                    ') no tiene permiso para esta acción.'
+    ], 403);
+}
+
+// app/Http/Controllers/Api/PedidoController.php:30
+if (!$cliente) {
+    return response()->json([
+        'message' => 'El usuario no está registrado como cliente'
+    ], 403);
+}
+```
+
+**Difference from 401:**
+
+| Status | Authentication | Authorization |
+|--------|----------------|---------------|
+| 401 | ❌ Not authenticated | N/A |
+| 403 | ✅ Authenticated | ❌ Lacks permission |
+
+### 404 Not Found
+
+**Meaning:** Requested resource doesn't exist
+
+**Used for:**
+- Invalid product ID
+- Invalid variant ID
+- Non-existent route
+
+<CodeGroup>
+```json Product Not Found (404)
+GET /api/productos/9999
+
+Response:
+{
+  "status": "error",
+  "message": "Producto no encontrado"
+}
+```
+
+```json Variant Not Found (404)
+PUT /api/inventario/9999
+
+Response:
+{
+  "message": "No query results for model [App\\Models\\VarianteProducto] 9999"
+}
+```
+
+```json Route Not Found (404)
+GET /api/nonexistent-endpoint
+
+Response:
+{
+  "message": "Route not found"
+}
+```
+</CodeGroup>
+
+**Implementation:**
+
+```php
+// app/Http/Controllers/Api/ProductoController.php:34
+if (!$producto) {
+    return response()->json([
+        'status' => 'error',
+        'message' => 'Producto no encontrado'
+    ], 404);
+}
+
+// Using findOrFail (automatic 404)
+// app/Http/Controllers/Api/InventoryController.php:38
+$variante = VarianteProducto::findOrFail($id);
+```
+
+### 422 Unprocessable Entity
+
+**Meaning:** Validation failed
+
+**Used for:**
+- Missing required fields
+- Invalid data types
+- Failed validation rules
+- Duplicate email
+- Password mismatch
+
+<CodeGroup>
+```json Missing Fields (422)
+POST /api/register
+Body: {"nombre": "Juan"}  // Missing required fields
+
+Response:
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "apellido_paterno": [
+      "The apellido paterno field is required."
+    ],
+    "correo": [
+      "The correo field is required."
+    ],
+    "contrasena": [
+      "The contrasena field is required."
+    ],
+    "telefono": [
+      "The telefono field is required."
+    ]
+  }
+}
+```
+
+```json Duplicate Email (422)
+POST /api/register
+Body: {"correo": "admin@solare.com", ...}
+
+Response:
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "correo": [
+      "The correo has already been taken."
+    ]
+  }
+}
+```
+
+```json Password Mismatch (422)
+POST /api/register
+Body: {
+  "contrasena": "password123",
+  "contrasena_confirmation": "different",
+  ...
+}
+
+Response:
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "contrasena": [
+      "The contrasena confirmation does not match."
+    ]
+  }
+}
+```
+
+```json Invalid Order (422)
+POST /api/pedidos
+Body: {
+  "productos": [
+    {
+      "variante_id": 9999,  // Doesn't exist
+      "cantidad": -5         // Negative
+    }
+  ]
+}
+
+Response:
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "productos.0.variante_id": [
+      "The selected productos.0.variante_id is invalid."
+    ],
+    "productos.0.cantidad": [
+      "The productos.0.cantidad must be at least 1."
+    ]
+  }
+}
+```
+
+```json Invalid Stock Type (422)
+PUT /api/inventario/12
+Body: {"tipo": "invalid", "cantidad": 10}
+
+Response:
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "tipo": [
+      "The selected tipo is invalid."
+    ]
+  }
+}
+```
+</CodeGroup>
+
+**Implementation:**
+
+```php
+// Laravel's automatic validation
+// app/Http/Controllers/Auth/AuthController.php:22
+$request->validate([
+    'nombre' => 'required|string|max:100',
+    'apellido_paterno' => 'required|string|max:100',
+    'correo' => 'required|email|unique:usuarios,correo',
+    'contrasena' => 'required|string|min:8|confirmed',
+    'telefono' => 'required|string|max:20',
+]);
+// Automatically returns 422 if validation fails
+```
+
+<Note>
+  422 responses always include an `errors` object with field-specific messages. Parse this to show user-friendly error messages.
+</Note>
+
+## Server Errors (5xx)
+
+### 500 Internal Server Error
+
+**Meaning:** Unexpected server-side error
+
+**Used for:**
+- Database errors
+- Uncaught exceptions
+- Transaction failures
+- Configuration issues
+
+<CodeGroup>
+```json Order Processing Error (500)
+POST /api/pedidos
+# Database constraint violation or trigger failure
+
+Response:
+{
+  "status": "error",
+  "message": "Error al procesar el pedido: SQLSTATE[23000]: Integrity constraint violation"
+}
+```
+
+```json Registration Error (500)
+POST /api/register
+# Database connection issue
+
+Response:
+{
+  "message": "Error al registrar usuario",
+  "error": "SQLSTATE[HY000]: General error: 1205 Lock wait timeout exceeded"
+}
+```
+
+```json Production Error (500)
+# When APP_DEBUG=false
+
+Response:
+{
+  "message": "Server Error"
+}
+```
+</CodeGroup>
+
+**Implementation:**
+
+```php
+// app/Http/Controllers/Api/PedidoController.php:70
+catch (\Exception $e) {
+    DB::rollBack();
+    return response()->json([
+        'status' => 'error',
+        'message' => 'Error al procesar el pedido: ' . $e->getMessage()
+    ], 500);
+}
+
+// app/Http/Controllers/Auth/AuthController.php:61
+catch (\Exception $e) {
+    return response()->json([
+        'message' => 'Error al registrar usuario',
+        'error' => $e->getMessage()
+    ], 500);
+}
+```
+
+<Warning>
+  **Production Security:** Set `APP_DEBUG=false` in production `.env` to hide detailed error messages and prevent information disclosure.
+</Warning>
+
+### Other 5xx Codes
+
+While not explicitly implemented in SOLARE, these may be returned by infrastructure:
+
+| Code | Name | When It Occurs |
+|------|------|----------------|
+| 502 | Bad Gateway | Reverse proxy can't reach Laravel |
+| 503 | Service Unavailable | Server maintenance or overload |
+| 504 | Gateway Timeout | Request took too long to process |
+
+## Response Code Decision Tree
+
+```
+Is the request properly formed?
+  ├─ No → 400 Bad Request
+  └─ Yes → Is authentication provided?
+      ├─ No → 401 Unauthorized
+      └─ Yes → Is authentication valid?
+          ├─ No → 401 Unauthorized
+          └─ Yes → Does user have required role?
+              ├─ No → 403 Forbidden
+              └─ Yes → Does the resource exist?
+                  ├─ No → 404 Not Found
+                  └─ Yes → Is the data valid?
+                      ├─ No → 422 Unprocessable Entity
+                      └─ Yes → Did the operation succeed?
+                          ├─ No → 500 Internal Server Error
+                          └─ Yes → Is it a creation?
+                              ├─ Yes → 201 Created
+                              └─ No → 200 OK
+```
+
+## Endpoint Status Code Reference
+
+### Authentication Endpoints
+
+| Endpoint | Method | Success | Error Codes |
+|----------|--------|---------|-------------|
+| `/login` | POST | 200 | 422 (wrong credentials), 500 |
+| `/register` | POST | 201 | 422 (validation), 500 |
+| `/logout` | POST | 200 | 401 (no token) |
+| `/profile` | GET | 200 | 401 (no token) |
+
+### Catalog Endpoints (Public)
+
+| Endpoint | Method | Success | Error Codes |
+|----------|--------|---------|-------------|
+| `/categorias` | GET | 200 | 500 |
+| `/productos` | GET | 200 | 500 |
+| `/productos/{id}` | GET | 200 | 404, 500 |
+
+### Order Endpoints
+
+| Endpoint | Method | Success | Error Codes |
+|----------|--------|---------|-------------|
+| `/pedidos` | GET | 200 | 401, 403 |
+| `/pedidos` | POST | 201 | 401, 403, 422, 500 |
+
+### Admin Endpoints
+
+| Endpoint | Method | Success | Error Codes |
+|----------|--------|---------|-------------|
+| `/admin/dashboard` | GET | 200 | 401, 403 |
+| `/admin/roles` | GET | 200 | 401, 403 |
+| `/admin/crear-empleado` | POST | 201 | 400, 401, 403, 422, 500 |
+
+### Inventory Endpoints
+
+| Endpoint | Method | Success | Error Codes |
+|----------|--------|---------|-------------|
+| `/inventario` | GET | 200 | 401, 403, 500 |
+| `/inventario/{id}` | PUT | 200 | 400, 401, 403, 404, 422, 500 |
+
+### Report Endpoints
+
+| Endpoint | Method | Success | Error Codes |
+|----------|--------|---------|-------------|
+| `/reportes/ventas` | GET | 200 | 401, 403, 500 |
+| `/reportes/ventas/pdf` | GET | 200 (PDF) | 401, 403, 500 |
+
+## Client Implementation Guide
+
+### Handling Status Codes
+
+<CodeGroup>
+```javascript JavaScript/Axios
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: 'http://127.0.0.1:8000/api',
+  headers: {
+    'Accept': 'application/json',
+    'Content-Type': 'application/json'
+  }
+});
+
+// Response interceptor
+api.interceptors.response.use(
+  response => response.data,  // 2xx responses
+  error => {
+    const status = error.response?.status;
+    const data = error.response?.data;
+
+    switch (status) {
+      case 401:
+        // Redirect to login
+        console.error('Authentication required');
+        window.location.href = '/login';
+        break;
+      
+      case 403:
+        // Show permission error
+        console.error('Permission denied:', data.message);
+        break;
+      
+      case 422:
+        // Show validation errors
+        Object.keys(data.errors || {}).forEach(field => {
+          console.error(`${field}:`, data.errors[field].join(', '));
+        });
+        break;
+      
+      case 404:
+        console.error('Resource not found');
+        break;
+      
+      case 500:
+        console.error('Server error:', data.message);
+        break;
+      
+      default:
+        console.error('Unexpected error:', data.message);
+    }
+
+    return Promise.reject(error);
+  }
+);
+```
+
+```python Python
+import requests
+from typing import Dict, Any
+
+class SolareAPI:
+    BASE_URL = 'http://127.0.0.1:8000/api'
+    
+    def __init__(self, token: str = None):
+        self.session = requests.Session()
+        self.session.headers.update({
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        })
+        if token:
+            self.session.headers['Authorization'] = f'Bearer {token}'
+    
+    def _handle_response(self, response: requests.Response) -> Dict[Any, Any]:
+        status = response.status_code
+        
+        try:
+            data = response.json()
+        except ValueError:
+            data = {'message': 'Invalid JSON response'}
+        
+        if status == 200 or status == 201:
+            return data
+        elif status == 401:
+            raise AuthenticationError('Authentication required')
+        elif status == 403:
+            raise PermissionError(data.get('message', 'Forbidden'))
+        elif status == 404:
+            raise NotFoundError('Resource not found')
+        elif status == 422:
+            raise ValidationError(data.get('errors', {}))
+        elif status == 500:
+            raise ServerError(data.get('message', 'Server error'))
+        else:
+            raise APIError(f"Unexpected status {status}: {data.get('message')}")
+    
+    def get(self, endpoint: str) -> Dict[Any, Any]:
+        response = self.session.get(f'{self.BASE_URL}{endpoint}')
+        return self._handle_response(response)
+    
+    def post(self, endpoint: str, data: Dict) -> Dict[Any, Any]:
+        response = self.session.post(f'{self.BASE_URL}{endpoint}', json=data)
+        return self._handle_response(response)
+
+# Custom exceptions
+class APIError(Exception): pass
+class AuthenticationError(APIError): pass
+class ValidationError(APIError): pass
+class NotFoundError(APIError): pass
+class ServerError(APIError): pass
+```
+</CodeGroup>
+
+### Status Code Testing
+
+Postman test examples:
+
+```javascript
+// Test successful response
+pm.test("Status is 200 OK", function () {
+    pm.response.to.have.status(200);
+});
+
+// Test creation
+pm.test("Resource created (201)", function () {
+    pm.response.to.have.status(201);
+    const response = pm.response.json();
+    pm.expect(response).to.have.property('pedido_id');
+});
+
+// Test authentication
+pm.test("Requires authentication (401)", function () {
+    pm.response.to.have.status(401);
+});
+
+// Test authorization
+pm.test("Forbidden access (403)", function () {
+    pm.response.to.have.status(403);
+    pm.expect(pm.response.json().message).to.include('Acceso denegado');
+});
+
+// Test validation
+pm.test("Validation failed (422)", function () {
+    pm.response.to.have.status(422);
+    pm.expect(pm.response.json()).to.have.property('errors');
+});
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always Check Status Code First">
+    Before parsing the response body, check the HTTP status code to determine the response category (success, client error, server error).
+    
+    ```javascript
+    if (response.status >= 200 && response.status < 300) {
+      // Success
+    } else if (response.status >= 400 && response.status < 500) {
+      // Client error
+    } else if (response.status >= 500) {
+      // Server error
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Parse Error Responses">
+    All error responses include JSON bodies with details:
+    
+    - 422: Check `errors` object for field-specific messages
+    - 403: Check `message` for role information
+    - 500: Log full error details for debugging
+  </Accordion>
+  
+  <Accordion title="Implement Retry Logic">
+    Only retry on specific status codes:
+    
+    - **Retry:** 500, 502, 503, 504 (after delay)
+    - **Don't retry:** 400, 401, 403, 404, 422
+  </Accordion>
+  
+  <Accordion title="Handle Token Expiration">
+    401 responses may indicate expired tokens. Implement refresh logic or redirect to login:
+    
+    ```javascript
+    if (status === 401) {
+      // Clear stored token
+      localStorage.removeItem('token');
+      // Redirect to login
+      window.location.href = '/login';
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Summary Table
+
+| Code | Name | Retry? | User Action | Technical Action |
+|------|------|--------|-------------|------------------|
+| 200 | OK | No | None | Process data |
+| 201 | Created | No | Show success | Store resource ID |
+| 400 | Bad Request | No | Fix input | Check business rules |
+| 401 | Unauthorized | No | Login | Provide valid token |
+| 403 | Forbidden | No | Contact admin | Use correct role |
+| 404 | Not Found | No | Check URL | Verify resource exists |
+| 422 | Validation Error | No | Fix fields | Show error messages |
+| 500 | Server Error | Yes | Try again | Report to support |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Detailed error handling guide
+  </Card>
+  
+  <Card title="Testing Guide" icon="flask-vial" href="/guides/testing-with-postman">
+    Test status codes in Postman
+  </Card>
+  
+  <Card title="User Roles" icon="users-gear" href="/guides/user-roles">
+    Understand 403 authorization errors
+  </Card>
+  
+  <Card title="API Reference" icon="book" href="/api/auth/login">
+    See status codes for each endpoint
+  </Card>
+</CardGroup>

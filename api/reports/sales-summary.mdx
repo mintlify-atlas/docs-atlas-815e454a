@@ -1,0 +1,185 @@
+---
+title: "Sales Summary Report"
+api: "GET /api/reportes/ventas"
+description: "Retrieve comprehensive sales statistics including monthly revenue, top products, and order metrics"
+---
+
+## Overview
+
+This endpoint returns a JSON summary of sales data for dashboard visualizations and analytics. It provides:
+- Monthly sales totals for the last 6 months
+- Top 5 best-selling products
+- Overall sales statistics (total revenue, order count, average ticket)
+
+## Authentication
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token for authentication. User must have one of the following roles:
+  - **Administrador**
+  - **Gerente**
+  - **Supervisor**
+</ParamField>
+
+## Response
+
+<ResponseField name="status" type="string">
+  Response status indicator
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  Container for all sales data
+  
+  <Expandable title="properties">
+    <ResponseField name="resumen" type="object">
+      General sales statistics
+      
+      <Expandable title="properties">
+        <ResponseField name="total_ingresos" type="number">
+          Total revenue from all sales (calculated as sum of `cantidad * precio_unitario` from order details)
+        </ResponseField>
+        
+        <ResponseField name="total_pedidos" type="number">
+          Total count of orders
+        </ResponseField>
+        
+        <ResponseField name="ticket_promedio" type="number">
+          Average order value (total_ingresos / total_pedidos)
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="grafica_ventas" type="array">
+      Monthly sales data for the last 6 months
+      
+      <Expandable title="array items">
+        <ResponseField name="mes" type="number">
+          Month number (1-12)
+        </ResponseField>
+        
+        <ResponseField name="total" type="number">
+          Total sales for that month
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="top_productos" type="array">
+      Top 5 best-selling product variants
+      
+      <Expandable title="array items">
+        <ResponseField name="variante_id" type="number">
+          ID of the product variant
+        </ResponseField>
+        
+        <ResponseField name="total_vendido" type="number">
+          Total quantity sold
+        </ResponseField>
+        
+        <ResponseField name="variante" type="object">
+          Variant details including nested product information
+          
+          <Expandable title="properties">
+            <ResponseField name="id" type="number">
+              Variant ID
+            </ResponseField>
+            
+            <ResponseField name="producto" type="object">
+              Parent product information
+            </ResponseField>
+          </Expandable>
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X GET https://api.solare.com/api/reportes/ventas \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Accept: application/json"
+```
+
+## Example Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "resumen": {
+      "total_ingresos": 458900.50,
+      "total_pedidos": 127,
+      "ticket_promedio": 3613.39
+    },
+    "grafica_ventas": [
+      {
+        "mes": 3,
+        "total": 89500.00
+      },
+      {
+        "mes": 2,
+        "total": 76300.50
+      },
+      {
+        "mes": 1,
+        "total": 92100.00
+      }
+    ],
+    "top_productos": [
+      {
+        "variante_id": 15,
+        "total_vendido": 45,
+        "variante": {
+          "id": 15,
+          "producto": {
+            "id": 3,
+            "nombre": "Panel Solar 450W",
+            "descripcion": "Panel monocristalino de alta eficiencia"
+          }
+        }
+      },
+      {
+        "variante_id": 8,
+        "total_vendido": 38,
+        "variante": {
+          "id": 8,
+          "producto": {
+            "id": 2,
+            "nombre": "Inversor 5kW",
+            "descripcion": "Inversor híbrido con conexión a red"
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+## Error Responses
+
+### 401 Unauthorized
+
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
+### 403 Forbidden
+
+```json
+{
+  "message": "No tiene permisos para acceder a este recurso."
+}
+```
+
+Returned when the authenticated user does not have Administrador, Gerente, or Supervisor role.
+
+## Implementation Notes
+
+- Monthly sales are calculated from `DetallePedido` records using `MONTH(creado_en)`
+- Top products are determined by sum of `cantidad` grouped by `variante_id`
+- Total revenue calculation: `SUM(cantidad * precio_unitario)`
+- The endpoint uses eager loading for product variant relationships
+- Results are ordered by most recent month first for `grafica_ventas`
+- Controller location: `app/Http/Controllers/Api/ReporteController.php:17`

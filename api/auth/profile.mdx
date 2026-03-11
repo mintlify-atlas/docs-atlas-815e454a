@@ -1,0 +1,122 @@
+---
+title: 'Get Profile'
+api: 'GET /api/profile'
+---
+
+Retrieves the authenticated user's profile information including their role details. This endpoint requires authentication.
+
+<Warning>
+  This endpoint requires authentication. Include a valid Bearer token in the Authorization header.
+</Warning>
+
+## Headers
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token for authentication. Format: `Bearer {access_token}`
+</ParamField>
+
+## Response
+
+Returns the complete user object with role relationship loaded.
+
+<ResponseField name="id" type="integer">
+  User's unique identifier.
+</ResponseField>
+
+<ResponseField name="nombre" type="string">
+  User's first name.
+</ResponseField>
+
+<ResponseField name="apellido_paterno" type="string">
+  User's paternal last name.
+</ResponseField>
+
+<ResponseField name="apellido_materno" type="string|null">
+  User's maternal last name (may be null).
+</ResponseField>
+
+<ResponseField name="correo" type="string">
+  User's email address.
+</ResponseField>
+
+<ResponseField name="rol_id" type="integer">
+  User's role ID.
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  Timestamp when the user account was created.
+</ResponseField>
+
+<ResponseField name="updated_at" type="string">
+  Timestamp when the user account was last updated.
+</ResponseField>
+
+<ResponseField name="rol" type="object">
+  User's role details.
+  
+  <ResponseField name="rol.id" type="integer">
+    Role unique identifier.
+  </ResponseField>
+  
+  <ResponseField name="rol.nombre" type="string">
+    Role name (e.g., "Cliente", "Admin", "Empleado", "Técnico").
+  </ResponseField>
+  
+  <ResponseField name="rol.created_at" type="string">
+    Timestamp when the role was created.
+  </ResponseField>
+  
+  <ResponseField name="rol.updated_at" type="string">
+    Timestamp when the role was last updated.
+  </ResponseField>
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X GET https://api.solare.com/api/profile \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9..."
+```
+
+## Example Response
+
+```json
+{
+  "id": 15,
+  "nombre": "Juan",
+  "apellido_paterno": "Pérez",
+  "apellido_materno": "García",
+  "correo": "juan.perez@example.com",
+  "rol_id": 3,
+  "created_at": "2026-03-10T10:30:00.000000Z",
+  "updated_at": "2026-03-10T10:30:00.000000Z",
+  "rol": {
+    "id": 3,
+    "nombre": "Cliente",
+    "created_at": "2026-01-01T00:00:00.000000Z",
+    "updated_at": "2026-01-01T00:00:00.000000Z"
+  }
+}
+```
+
+## Error Responses
+
+### Unauthenticated (401)
+
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
+This error occurs when:
+- No Authorization header is provided
+- The token is invalid or malformed
+- The token has been revoked
+- The token has expired
+
+<Note>
+  This endpoint is useful for verifying that a user's token is still valid and for retrieving up-to-date user information without requiring a new login.
+</Note>

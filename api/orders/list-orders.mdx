@@ -1,0 +1,198 @@
+---
+title: 'List Orders'
+api: 'GET /api/pedidos'
+description: 'Retrieve all orders for the authenticated customer'
+---
+
+## Authentication
+
+This endpoint requires authentication with the **Cliente** role.
+
+## Description
+
+Returns a list of all orders belonging to the authenticated customer, including:
+- Order details
+- Product variants in each order
+- Associated product information
+
+If the authenticated user is not registered as a cliente, an empty array is returned.
+
+## Response Fields
+
+<ResponseField name="status" type="string">
+  Status of the operation. Returns `"success"` when orders are retrieved.
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  Array of order objects belonging to the customer.
+  
+  <Expandable title="Order Object">
+    <ResponseField name="id" type="integer">
+      Unique identifier for the order.
+    </ResponseField>
+    
+    <ResponseField name="cliente_id" type="integer">
+      ID of the customer who placed the order.
+    </ResponseField>
+    
+    <ResponseField name="direccion_envio_id" type="integer">
+      ID of the shipping address for this order. May be null.
+    </ResponseField>
+    
+    <ResponseField name="fecha_pedido" type="datetime">
+      Timestamp when the order was created.
+    </ResponseField>
+    
+    <ResponseField name="estado_pago" type="string">
+      Payment status. Default: `"pendiente"` (pending).
+    </ResponseField>
+    
+    <ResponseField name="estado_envio" type="string">
+      Shipping status. Default: `"procesando"` (processing).
+    </ResponseField>
+    
+    <ResponseField name="notas" type="string">
+      Optional notes or comments for the order. May be null.
+    </ResponseField>
+    
+    <ResponseField name="created_at" type="datetime">
+      Timestamp when the order record was created.
+    </ResponseField>
+    
+    <ResponseField name="updated_at" type="datetime">
+      Timestamp when the order record was last updated.
+    </ResponseField>
+    
+    <ResponseField name="detalles" type="array">
+      Array of order detail objects (line items).
+      
+      <Expandable title="Order Detail Object">
+        <ResponseField name="id" type="integer">
+          Unique identifier for the order detail.
+        </ResponseField>
+        
+        <ResponseField name="pedido_id" type="integer">
+          ID of the parent order.
+        </ResponseField>
+        
+        <ResponseField name="variante_id" type="integer">
+          ID of the product variant ordered.
+        </ResponseField>
+        
+        <ResponseField name="cantidad" type="integer">
+          Quantity ordered.
+        </ResponseField>
+        
+        <ResponseField name="precio_unitario" type="decimal">
+          Unit price at the time of order (base price + variant additional price).
+        </ResponseField>
+        
+        <ResponseField name="variante" type="object">
+          The product variant object with nested product information.
+          
+          <Expandable title="Variant Object">
+            <ResponseField name="id" type="integer">
+              Variant ID.
+            </ResponseField>
+            
+            <ResponseField name="producto_id" type="integer">
+              ID of the parent product.
+            </ResponseField>
+            
+            <ResponseField name="precio_adicional" type="decimal">
+              Additional price for this variant.
+            </ResponseField>
+            
+            <ResponseField name="producto" type="object">
+              The product object with base information.
+            </ResponseField>
+          </Expandable>
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X GET https://api.solare.com/api/pedidos \
+  -H "Authorization: Bearer YOUR_TOKEN_HERE" \
+  -H "Content-Type: application/json"
+```
+
+## Example Response
+
+```json
+{
+  "status": "success",
+  "data": [
+    {
+      "id": 42,
+      "cliente_id": 15,
+      "direccion_envio_id": 3,
+      "fecha_pedido": "2026-03-11T10:30:00.000000Z",
+      "estado_pago": "pendiente",
+      "estado_envio": "procesando",
+      "notas": "Por favor entregar antes del mediodía",
+      "created_at": "2026-03-11T10:30:00.000000Z",
+      "updated_at": "2026-03-11T10:30:00.000000Z",
+      "detalles": [
+        {
+          "id": 101,
+          "pedido_id": 42,
+          "variante_id": 1,
+          "cantidad": 2,
+          "precio_unitario": 299.99,
+          "variante": {
+            "id": 1,
+            "producto_id": 10,
+            "precio_adicional": 50.00,
+            "producto": {
+              "id": 10,
+              "nombre": "Panel Solar 300W",
+              "precio_base": 249.99,
+              "descripcion": "Panel solar de alta eficiencia"
+            }
+          }
+        },
+        {
+          "id": 102,
+          "pedido_id": 42,
+          "variante_id": 5,
+          "cantidad": 1,
+          "precio_unitario": 149.99,
+          "variante": {
+            "id": 5,
+            "producto_id": 12,
+            "precio_adicional": 0.00,
+            "producto": {
+              "id": 12,
+              "nombre": "Inversor 2000W",
+              "precio_base": 149.99,
+              "descripcion": "Inversor de corriente"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+## Empty Response
+
+If the user is not registered as a cliente or has no orders:
+
+```json
+{
+  "data": []
+}
+```
+
+## Notes
+
+- The endpoint uses eager loading (`with('detalles.variante.producto')`) to include related data in a single query
+- Only orders belonging to the authenticated customer are returned
+- The response includes complete order history with all product details
+- Prices in order details reflect the price at the time of order creation, not current prices

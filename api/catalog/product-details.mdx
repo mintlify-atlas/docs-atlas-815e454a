@@ -1,0 +1,315 @@
+---
+title: 'Get Product Details'
+api: 'GET /api/productos/{id}'
+description: 'Retrieve detailed information for a specific product'
+---
+
+## Endpoint
+
+```
+GET /api/productos/{id}
+```
+
+## Description
+
+Retrieves detailed information for a specific product by its ID, including the associated category, material variants, and product images.
+
+## Authentication
+
+<Note>
+This is a public endpoint. No authentication required.
+</Note>
+
+## Path Parameters
+
+<ParamField path="id" type="integer" required>
+  The unique identifier of the product to retrieve.
+</ParamField>
+
+## Response
+
+### Success Response (200)
+
+<ResponseField name="status" type="string">
+  The status of the response. Returns `"success"` when the product is found.
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  The product object with eager-loaded relationships.
+  
+  <Expandable title="producto object">
+    <ResponseField name="id" type="integer">
+      Unique identifier for the product.
+    </ResponseField>
+    
+    <ResponseField name="categoria_id" type="integer">
+      Foreign key referencing the product's category.
+    </ResponseField>
+    
+    <ResponseField name="nombre" type="string">
+      The name of the product.
+    </ResponseField>
+    
+    <ResponseField name="descripcion" type="string">
+      Detailed description of the product.
+    </ResponseField>
+    
+    <ResponseField name="precio_base" type="decimal">
+      Base price of the product before variant pricing.
+    </ResponseField>
+    
+    <ResponseField name="sku_base" type="string">
+      Base SKU (Stock Keeping Unit) for the product.
+    </ResponseField>
+    
+    <ResponseField name="activo" type="boolean">
+      Whether the product is active.
+    </ResponseField>
+    
+    <ResponseField name="created_at" type="string">
+      Timestamp when the product was created.
+    </ResponseField>
+    
+    <ResponseField name="updated_at" type="string">
+      Timestamp when the product was last updated.
+    </ResponseField>
+    
+    <ResponseField name="categoria" type="object">
+      The category this product belongs to.
+      
+      <Expandable title="categoria object">
+        <ResponseField name="id" type="integer">
+          Category ID.
+        </ResponseField>
+        
+        <ResponseField name="nombre" type="string">
+          Category name.
+        </ResponseField>
+        
+        <ResponseField name="descripcion" type="string">
+          Category description.
+        </ResponseField>
+        
+        <ResponseField name="created_at" type="string">
+          Category creation timestamp.
+        </ResponseField>
+        
+        <ResponseField name="updated_at" type="string">
+          Category last update timestamp.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="variantes" type="array">
+      Array of product variants with different materials and colors.
+      
+      <Expandable title="variante object">
+        <ResponseField name="id" type="integer">
+          Variant ID.
+        </ResponseField>
+        
+        <ResponseField name="producto_id" type="integer">
+          Product ID this variant belongs to.
+        </ResponseField>
+        
+        <ResponseField name="material_id" type="integer">
+          Material ID for this variant.
+        </ResponseField>
+        
+        <ResponseField name="color" type="string">
+          Color of this product variant.
+        </ResponseField>
+        
+        <ResponseField name="precio_adicional" type="decimal">
+          Additional price for this variant (added to base price).
+        </ResponseField>
+        
+        <ResponseField name="existencias" type="integer">
+          Current stock quantity for this variant.
+        </ResponseField>
+        
+        <ResponseField name="sku_especifico" type="string">
+          Specific SKU for this variant.
+        </ResponseField>
+        
+        <ResponseField name="activo" type="boolean">
+          Whether this variant is active.
+        </ResponseField>
+        
+        <ResponseField name="created_at" type="string">
+          Variant creation timestamp.
+        </ResponseField>
+        
+        <ResponseField name="updated_at" type="string">
+          Variant last update timestamp.
+        </ResponseField>
+        
+        <ResponseField name="material" type="object">
+          Material information for this variant.
+          
+          <Expandable title="material object">
+            <ResponseField name="id" type="integer">
+              Material ID.
+            </ResponseField>
+            
+            <ResponseField name="nombre" type="string">
+              Material name (e.g., "Acero Inoxidable", "Madera Teca").
+            </ResponseField>
+            
+            <ResponseField name="descripcion" type="string">
+              Material description.
+            </ResponseField>
+            
+            <ResponseField name="creado_en" type="string">
+              Material creation timestamp.
+            </ResponseField>
+            
+            <ResponseField name="actualizado_en" type="string">
+              Material last update timestamp.
+            </ResponseField>
+          </Expandable>
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="imagenes" type="array">
+      Array of product images.
+      
+      <Expandable title="imagen object">
+        <ResponseField name="id" type="integer">
+          Image ID.
+        </ResponseField>
+        
+        <ResponseField name="producto_id" type="integer">
+          Product ID this image belongs to.
+        </ResponseField>
+        
+        <ResponseField name="url" type="string">
+          URL or path to the image file.
+        </ResponseField>
+        
+        <ResponseField name="orden" type="integer">
+          Display order for the image.
+        </ResponseField>
+        
+        <ResponseField name="created_at" type="string">
+          Image creation timestamp.
+        </ResponseField>
+        
+        <ResponseField name="updated_at" type="string">
+          Image last update timestamp.
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Error Response (404)
+
+<ResponseField name="status" type="string">
+  The status of the response. Returns `"error"` when the product is not found.
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Error message. Returns `"Producto no encontrado"` when the product does not exist.
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X GET https://api.solare.com/api/productos/1 \
+  -H "Accept: application/json"
+```
+
+## Example Success Response
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": 1,
+    "categoria_id": 1,
+    "nombre": "Silla de Jardín Moderna",
+    "descripcion": "Silla ergonómica para exteriores con diseño contemporáneo",
+    "precio_base": "1250.00",
+    "sku_base": "SJM-001",
+    "activo": 1,
+    "created_at": "2026-03-01T10:00:00.000000Z",
+    "updated_at": "2026-03-05T14:30:00.000000Z",
+    "categoria": {
+      "id": 1,
+      "nombre": "Muebles de Exterior",
+      "descripcion": "Muebles diseñados para espacios al aire libre",
+      "created_at": "2026-03-01T10:00:00.000000Z",
+      "updated_at": "2026-03-01T10:00:00.000000Z"
+    },
+    "variantes": [
+      {
+        "id": 1,
+        "producto_id": 1,
+        "material_id": 1,
+        "color": "Negro",
+        "precio_adicional": "0.00",
+        "existencias": 15,
+        "sku_especifico": "SJM-001-AI-NEG",
+        "activo": 1,
+        "created_at": "2026-03-01T10:00:00.000000Z",
+        "updated_at": "2026-03-08T09:15:00.000000Z",
+        "material": {
+          "id": 1,
+          "nombre": "Acero Inoxidable",
+          "descripcion": "Material resistente a la corrosión",
+          "creado_en": "2026-03-01T10:00:00.000000Z",
+          "actualizado_en": "2026-03-01T10:00:00.000000Z"
+        }
+      },
+      {
+        "id": 2,
+        "producto_id": 1,
+        "material_id": 2,
+        "color": "Natural",
+        "precio_adicional": "350.00",
+        "existencias": 8,
+        "sku_especifico": "SJM-001-MT-NAT",
+        "activo": 1,
+        "created_at": "2026-03-01T10:00:00.000000Z",
+        "updated_at": "2026-03-08T09:15:00.000000Z",
+        "material": {
+          "id": 2,
+          "nombre": "Madera Teca",
+          "descripcion": "Madera de alta calidad para exteriores",
+          "creado_en": "2026-03-01T10:00:00.000000Z",
+          "actualizado_en": "2026-03-01T10:00:00.000000Z"
+        }
+      }
+    ],
+    "imagenes": [
+      {
+        "id": 1,
+        "producto_id": 1,
+        "url": "/storage/productos/silla-jardin-moderna-1.jpg",
+        "orden": 1,
+        "created_at": "2026-03-01T10:00:00.000000Z",
+        "updated_at": "2026-03-01T10:00:00.000000Z"
+      },
+      {
+        "id": 2,
+        "producto_id": 1,
+        "url": "/storage/productos/silla-jardin-moderna-2.jpg",
+        "orden": 2,
+        "created_at": "2026-03-01T10:00:00.000000Z",
+        "updated_at": "2026-03-01T10:00:00.000000Z"
+      }
+    ]
+  }
+}
+```
+
+## Example Error Response
+
+```json
+{
+  "status": "error",
+  "message": "Producto no encontrado"
+}
+```

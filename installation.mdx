@@ -1,0 +1,436 @@
+---
+title: 'Installation & Setup'
+description: 'Complete guide to install and configure the SOLARE API on your local machine'
+icon: 'download'
+---
+
+This guide will help you set up the SOLARE API backend on your local development environment. The API is built with **Laravel 12** and **PHP 8.2**.
+
+## System Requirements
+
+Before you begin, ensure your system meets these requirements:
+
+<CardGroup cols={2}>
+  <Card title="PHP 8.2+" icon="php">
+    Required for Laravel 12 compatibility
+  </Card>
+  <Card title="Composer 2.x" icon="box">
+    PHP dependency manager
+  </Card>
+  <Card title="MariaDB/MySQL" icon="database">
+    Database server for data storage
+  </Card>
+  <Card title="Node.js 16+" icon="node-js">
+    For asset compilation (optional)
+  </Card>
+</CardGroup>
+
+<Note>
+  **Recommended**: Use [Laravel Herd](https://herd.laravel.com/) or [Laravel Sail](https://laravel.com/docs/sail) for an easy all-in-one development environment.
+</Note>
+
+## Installation Steps
+
+<Steps>
+  <Step title="Clone the Repository">
+    First, clone the SOLARE API repository to your local machine.
+
+    ```bash
+    git clone https://github.com/your-org/solare-api.git
+    cd solare-api
+    ```
+  </Step>
+
+  <Step title="Install PHP Dependencies">
+    Use Composer to install all required PHP packages.
+
+    ```bash
+    composer install
+    ```
+
+    This will install:
+    - **Laravel Framework 12.x** - Core framework
+    - **Laravel Passport** - API authentication with OAuth2 tokens
+    - **DomPDF** - PDF report generation
+    - All other dependencies defined in `composer.json`
+
+    <Warning>
+      If you encounter memory limit errors, try: `php -d memory_limit=-1 /usr/local/bin/composer install`
+    </Warning>
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    Copy the example environment file and configure your local settings.
+
+    ```bash
+    cp .env.example .env
+    ```
+
+    Update the following values in your `.env` file:
+
+    ```bash .env
+    APP_NAME="SOLARE API"
+    APP_ENV=local
+    APP_DEBUG=true
+    APP_URL=http://127.0.0.1:8000
+
+    # Database Configuration
+    DB_CONNECTION=mariadb
+    DB_HOST=127.0.0.1
+    DB_PORT=3306
+    DB_DATABASE=muebleria_db
+    DB_USERNAME=root
+    DB_PASSWORD=your_database_password
+
+    # Session & Cache
+    SESSION_DRIVER=database
+    CACHE_STORE=database
+    QUEUE_CONNECTION=database
+    ```
+
+    <Tip>
+      The database name `muebleria_db` is the default for this project. You can change it if needed, but ensure consistency with your database creation step.
+    </Tip>
+  </Step>
+
+  <Step title="Generate Application Key">
+    Laravel requires an application key for encryption. Generate it using:
+
+    ```bash
+    php artisan key:generate
+    ```
+
+    This will automatically update the `APP_KEY` in your `.env` file.
+  </Step>
+
+  <Step title="Create the Database">
+    Create a new database for the project. Using MySQL/MariaDB CLI:
+
+    ```sql
+    CREATE DATABASE muebleria_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    ```
+
+    Or using a GUI tool like **phpMyAdmin**, **TablePlus**, or **MySQL Workbench**.
+  </Step>
+
+  <Step title="Run Database Migrations">
+    Execute migrations to create all required database tables with custom timestamp columns (`creado_en`, `actualizado_en`).
+
+    ```bash
+    php artisan migrate
+    ```
+
+    This creates tables for:
+    - Users and roles (`usuarios`, `roles`)
+    - Products and variants (`productos`, `variantes_producto`, `materiales`, `categorias`)
+    - Orders (`pedidos`, `detalles_pedido`)
+    - Inventory (`movimientos_inventario`)
+    - Customer data (`clientes`, `direcciones_envio`)
+
+    <Note>
+      The project uses **custom timestamp column names** (`creado_en`, `actualizado_en`) to match an existing database schema. This is configured in the models.
+    </Note>
+  </Step>
+
+  <Step title="Install Laravel Passport">
+    Set up Passport for API authentication using OAuth2 tokens.
+
+    ```bash
+    php artisan passport:install
+    ```
+
+    This command will:
+    - Generate encryption keys for secure token generation
+    - Create personal access and password grant clients
+    - Display client IDs and secrets (save these if needed)
+
+    <Warning>
+      Keep your Passport keys secure. Never commit the `storage/oauth-private.key` and `storage/oauth-public.key` files to version control.
+    </Warning>
+  </Step>
+
+  <Step title="Seed Test Data">
+    Populate the database with test accounts and sample data.
+
+    ```bash
+    php artisan db:seed
+    ```
+
+    This creates:
+
+    **Test User Accounts:**
+    | Role | Email | Password |
+    |------|-------|----------|
+    | Administrator | `admin@solare.com` | `password123` |
+    | Customer | `cliente@solare.com` | `password123` |
+
+    **Sample Catalog Data:**
+    - Product categories (Salas, Comedores, Recámaras, Oficina)
+    - Luxury furniture products with variants
+    - Material options (Terciopelo, Cuero, Madera)
+    - Initial inventory stock levels
+  </Step>
+
+  <Step title="Start the Development Server">
+    Launch the Laravel development server:
+
+    ```bash
+    php artisan serve
+    ```
+
+    Your API will be available at: **`http://127.0.0.1:8000`**
+
+    <Tip>
+      To use a different port: `php artisan serve --port=8080`
+    </Tip>
+  </Step>
+
+  <Step title="Verify Installation">
+    Test that your API is working by making a simple request:
+
+    ```bash
+    curl -X GET http://127.0.0.1:8000/api/categorias \
+      -H "Accept: application/json"
+    ```
+
+    You should receive a JSON response with product categories:
+
+    ```json
+    {
+      "status": "success",
+      "data": [
+        {
+          "id": 1,
+          "nombre": "Salas",
+          "descripcion": "Muebles de sala de lujo"
+        },
+        {
+          "id": 2,
+          "nombre": "Comedores",
+          "descripcion": "Comedores elegantes y funcionales"
+        }
+      ]
+    }
+    ```
+
+    <Check>
+      If you see this response, your installation is complete and working correctly!
+    </Check>
+  </Step>
+</Steps>
+
+## Project Architecture Overview
+
+The SOLARE API follows a **RESTful architecture** with strict separation of concerns:
+
+```
+solare-api/
+├── app/
+│   ├── Http/
+│   │   ├── Controllers/
+│   │   │   ├── Auth/
+│   │   │   │   └── AuthController.php      # Authentication & user management
+│   │   │   └── Api/
+│   │   │       ├── CategoriaController.php # Product categories
+│   │   │       ├── ProductoController.php  # Product catalog
+│   │   │       ├── PedidoController.php    # Order processing
+│   │   │       ├── InventoryController.php # Stock management
+│   │   │       └── ReporteController.php   # Sales reports & PDF export
+│   │   └── Middleware/
+│   │       └── CheckRole.php               # Role-based access control
+│   └── Models/
+│       ├── User.php                        # User authentication model
+│       ├── Producto.php                    # Product model
+│       ├── VarianteProducto.php           # Product variants (color/material)
+│       ├── Pedido.php                      # Orders
+│       └── DetallePedido.php              # Order line items
+├── database/
+│   ├── migrations/                         # Database schema definitions
+│   └── seeders/                            # Test data generators
+├── routes/
+│   └── api.php                             # API endpoint definitions
+└── config/
+    ├── database.php                        # Database configuration
+    └── auth.php                            # Authentication settings
+```
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Laravel Sanctum/Passport" icon="shield-check">
+    Secure API authentication with Bearer tokens and OAuth2 support
+  </Card>
+  <Card title="Role-Based Access Control" icon="user-shield">
+    Five user roles: Administrator, Manager, Salesperson, Warehouse, Customer
+  </Card>
+  <Card title="Product Variants" icon="swatchbook">
+    Support for multiple materials, colors, and stock levels per product
+  </Card>
+  <Card title="Automatic Stock Management" icon="warehouse">
+    MySQL triggers automatically deduct inventory on order creation
+  </Card>
+  <Card title="Sales Reports" icon="chart-line">
+    JSON data for dashboards and PDF export for executive reports
+  </Card>
+  <Card title="Custom Timestamps" icon="clock">
+    Mapped to existing database with Spanish column names
+  </Card>
+</CardGroup>
+
+## Database Triggers
+
+<Note>
+  **Important**: The project uses MySQL triggers to automatically manage stock levels when orders are placed. These triggers are defined in the database and will deduct inventory from `variantes_producto` when a `DetallePedido` is created.
+</Note>
+
+If you need to recreate the triggers manually, run:
+
+```sql
+DELIMITER $$
+
+CREATE TRIGGER after_detalle_pedido_insert
+AFTER INSERT ON detalles_pedido
+FOR EACH ROW
+BEGIN
+    UPDATE variantes_producto
+    SET stock = stock - NEW.cantidad
+    WHERE id = NEW.variante_id;
+END$$
+
+DELIMITER ;
+```
+
+## Optional: Asset Compilation
+
+If you need to compile frontend assets (Tailwind CSS, Vue components):
+
+```bash
+# Install Node dependencies
+npm install
+
+# Compile assets for development
+npm run dev
+
+# Or build for production
+npm run build
+```
+
+<Note>
+  Asset compilation is **optional** for API-only usage. It's only needed if you plan to use Laravel's built-in frontend views.
+</Note>
+
+## Environment-Specific Configuration
+
+### Development
+```bash .env
+APP_ENV=local
+APP_DEBUG=true
+LOG_LEVEL=debug
+```
+
+### Production
+```bash .env
+APP_ENV=production
+APP_DEBUG=false
+LOG_LEVEL=error
+
+# Use proper database credentials
+DB_HOST=your-production-db-host
+DB_PASSWORD=secure_password_here
+
+# Enable caching
+CACHE_STORE=redis
+SESSION_DRIVER=redis
+```
+
+<Warning>
+  **Never deploy to production** with `APP_DEBUG=true` or default passwords. Always use strong, unique credentials and enable HTTPS.
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="composer install fails with memory errors">
+    Increase PHP memory limit:
+    ```bash
+    php -d memory_limit=-1 /usr/local/bin/composer install
+    ```
+  </Accordion>
+
+  <Accordion title="Database connection refused">
+    Check that:
+    - Your database server is running
+    - Database credentials in `.env` are correct
+    - Database host and port are accessible
+    
+    Test connection:
+    ```bash
+    php artisan db:show
+    ```
+  </Accordion>
+
+  <Accordion title="'No application encryption key has been specified'">
+    Generate an application key:
+    ```bash
+    php artisan key:generate
+    ```
+  </Accordion>
+
+  <Accordion title="Passport keys not found">
+    Reinstall Passport:
+    ```bash
+    php artisan passport:install --force
+    ```
+  </Accordion>
+
+  <Accordion title="Migration fails with custom timestamps">
+    The project uses custom timestamp columns (`creado_en`, `actualizado_en`). This is configured in the models with:
+    
+    ```php
+    const CREATED_AT = 'creado_en';
+    const UPDATED_AT = 'actualizado_en';
+    ```
+    
+    If you encounter issues, ensure your migrations define these columns correctly.
+  </Accordion>
+
+  <Accordion title="CORS errors when accessing from frontend">
+    Install and configure Laravel Sanctum for SPA authentication:
+    ```bash
+    php artisan vendor:publish --tag=sanctum-config
+    ```
+    
+    Update `config/cors.php` to allow your frontend domain.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+    Make your first API request and create an order
+  </Card>
+  <Card title="Authentication" icon="key" href="/architecture/authentication">
+    Learn about token management and security
+  </Card>
+  <Card title="Testing with Postman" icon="flask" href="/guides/testing-with-postman">
+    Import our Postman collection for easy testing
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/authentication/login">
+    Explore all available endpoints
+  </Card>
+</CardGroup>
+
+## Support & Resources
+
+<CardGroup cols={3}>
+  <Card title="Laravel Docs" icon="book" href="https://laravel.com/docs/12.x">
+    Official Laravel documentation
+  </Card>
+  <Card title="Passport Docs" icon="passport" href="https://laravel.com/docs/12.x/passport">
+    Laravel Passport guide
+  </Card>
+  <Card title="PHP Documentation" icon="php" href="https://www.php.net/docs.php">
+    PHP language reference
+  </Card>
+</CardGroup>

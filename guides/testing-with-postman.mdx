@@ -1,0 +1,686 @@
+---
+title: 'Testing with Postman'
+description: 'Complete guide to testing the SOLARE API using Postman with collection examples and workflows'
+icon: 'flask-vial'
+---
+
+This guide walks you through testing the SOLARE API using Postman, including authentication workflows, collection organization, and practical examples for all major endpoints.
+
+## Prerequisites
+
+Before you begin testing:
+
+<Steps>
+  <Step title="Install Postman">
+    Download and install [Postman](https://www.postman.com/downloads/) for your platform
+  </Step>
+  
+  <Step title="Verify API is Running">
+    Ensure the Laravel server is running:
+    ```bash
+    php artisan serve
+    ```
+    The API should be accessible at `http://127.0.0.1:8000`
+  </Step>
+  
+  <Step title="Set Base URL">
+    All endpoints use the base URL: `http://127.0.0.1:8000/api`
+  </Step>
+</Steps>
+
+<Note>
+  Always include the header `Accept: application/json` in all requests to ensure proper JSON responses.
+</Note>
+
+## Setting Up Your Postman Collection
+
+### Create a New Collection
+
+1. Click **New Collection** in Postman
+2. Name it "SOLARE API"
+3. Add collection-level variables:
+
+| Variable | Initial Value | Description |
+|----------|--------------|-------------|
+| `base_url` | `http://127.0.0.1:8000/api` | API base URL |
+| `token` | (empty) | Will store auth token |
+| `admin_email` | `admin@solare.com` | Admin test account |
+| `admin_password` | `password123` | Admin password |
+| `customer_email` | `cliente@solare.com` | Customer test account |
+| `customer_password` | `password123` | Customer password |
+
+### Configure Collection Authorization
+
+1. Go to collection **Authorization** tab
+2. Type: **Bearer Token**
+3. Token: `{{token}}`
+
+This allows all requests in the collection to automatically use the stored token.
+
+## Test Credentials
+
+The following seeded accounts are available for testing:
+
+<CardGroup cols={2}>
+  <Card title="Administrator" icon="user-crown">
+    **Email:** admin@solare.com  
+    **Password:** password123  
+    **Capabilities:** Full system access
+  </Card>
+  
+  <Card title="Customer" icon="user">
+    **Email:** cliente@solare.com  
+    **Password:** password123  
+    **Capabilities:** Browse catalog, place orders
+  </Card>
+</CardGroup>
+
+## Authentication Workflow
+
+### 1. Customer Registration
+
+Create a new customer account:
+
+<CodeGroup>
+```json Request
+POST {{base_url}}/register
+Content-Type: application/json
+Accept: application/json
+
+{
+  "nombre": "Juan",
+  "apellido_paterno": "Pérez",
+  "apellido_materno": "González",
+  "correo": "juan.perez@example.com",
+  "contrasena": "SecurePass123",
+  "contrasena_confirmation": "SecurePass123",
+  "telefono": "+52 55 1234 5678"
+}
+```
+
+```json Response (201 Created)
+{
+  "message": "Usuario registrado exitosamente como Cliente",
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+  "token_type": "Bearer",
+  "user": {
+    "id": 15,
+    "nombre": "Juan",
+    "apellido_paterno": "Pérez",
+    "correo": "juan.perez@example.com",
+    "rol": {
+      "id": 3,
+      "nombre": "Cliente"
+    }
+  }
+}
+```
+</CodeGroup>
+
+<Accordion title="Auto-save Token Script">
+  Add this to the **Tests** tab of your login/register requests to automatically save the token:
+  
+  ```javascript
+  if (pm.response.code === 201 || pm.response.code === 200) {
+      const response = pm.response.json();
+      if (response.access_token) {
+          pm.collectionVariables.set("token", response.access_token);
+          console.log("Token saved:", response.access_token.substring(0, 20) + "...");
+      }
+  }
+  ```
+</Accordion>
+
+### 2. Login
+
+Authenticate existing users:
+
+<CodeGroup>
+```json Customer Login
+POST {{base_url}}/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "correo": "{{customer_email}}",
+  "contrasena": "{{customer_password}}"
+}
+```
+
+```json Admin Login
+POST {{base_url}}/login
+Content-Type: application/json
+Accept: application/json
+
+{
+  "correo": "{{admin_email}}",
+  "contrasena": "{{admin_password}}"
+}
+```
+
+```json Success Response (200 OK)
+{
+  "message": "Inicio de sesión exitoso",
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+  "token_type": "Bearer",
+  "user": {
+    "id": 1,
+    "nombre": "Admin",
+    "apellido_paterno": "SOLARE",
+    "correo": "admin@solare.com",
+    "rol": "Administrador"
+  }
+}
+```
+</CodeGroup>
+
+### 3. Get User Profile
+
+Verify authentication:
+
+```json
+GET {{base_url}}/profile
+Authorization: Bearer {{token}}
+Accept: application/json
+```
+
+### 4. Logout
+
+Revoke the current token:
+
+```json
+POST {{base_url}}/logout
+Authorization: Bearer {{token}}
+Accept: application/json
+
+# Response (200 OK)
+{
+  "message": "Sesión cerrada exitosamente"
+}
+```
+
+## Testing Public Endpoints
+
+These endpoints don't require authentication:
+
+### List Categories
+
+```json
+GET {{base_url}}/categorias
+Accept: application/json
+
+# Response
+{
+  "status": "success",
+  "data": [
+    {
+      "id": 1,
+      "nombre": "Salas",
+      "descripcion": "Muebles para sala de estar"
+    },
+    {
+      "id": 2,
+      "nombre": "Comedores",
+      "descripcion": "Mesas y sillas de comedor"
+    }
+  ]
+}
+```
+
+### Browse Products
+
+```json
+GET {{base_url}}/productos
+Accept: application/json
+
+# Response includes full product details with variants
+{
+  "status": "success",
+  "data": [
+    {
+      "id": 5,
+      "nombre": "Sofá Moderno Capitoné",
+      "descripcion": "Elegante sofá de 3 plazas",
+      "precio_base": 25000.00,
+      "categoria": {
+        "id": 1,
+        "nombre": "Salas"
+      },
+      "variantes": [
+        {
+          "id": 12,
+          "color": "Gris Perla",
+          "existencias": 8,
+          "precio_adicional": 0,
+          "material": {
+            "nombre": "Terciopelo"
+          }
+        }
+      ],
+      "imagenes": [
+        {
+          "url": "https://example.com/sofa-gris.jpg",
+          "es_principal": true
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Get Product Details
+
+```json
+GET {{base_url}}/productos/5
+Accept: application/json
+```
+
+## Testing Customer Workflows
+
+<Warning>
+  These endpoints require authentication with a **Customer** or **Admin** role.
+</Warning>
+
+### Create an Order
+
+<CodeGroup>
+```json Request
+POST {{base_url}}/pedidos
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "productos": [
+    {
+      "variante_id": 12,
+      "cantidad": 2
+    },
+    {
+      "variante_id": 8,
+      "cantidad": 1
+    }
+  ],
+  "direccion_id": 3,
+  "notas": "Entrega entre 9am-2pm por favor"
+}
+```
+
+```json Success Response (201 Created)
+{
+  "status": "success",
+  "message": "Pedido creado exitosamente",
+  "pedido_id": 42
+}
+```
+
+```json Error: Insufficient Stock
+{
+  "status": "error",
+  "message": "Error al procesar el pedido: Stock insuficiente para la variante 12"
+}
+```
+</CodeGroup>
+
+<Note>
+  Stock is automatically decremented via database triggers when an order is created.
+</Note>
+
+### View Order History
+
+```json
+GET {{base_url}}/pedidos
+Authorization: Bearer {{token}}
+Accept: application/json
+
+# Response
+{
+  "status": "success",
+  "data": [
+    {
+      "id": 42,
+      "fecha_pedido": "2026-03-11T10:30:00",
+      "estado_pago": "pendiente",
+      "estado_envio": "procesando",
+      "detalles": [
+        {
+          "variante_id": 12,
+          "cantidad": 2,
+          "precio_unitario": 25000.00,
+          "variante": {
+            "color": "Gris Perla",
+            "producto": {
+              "nombre": "Sofá Moderno Capitoné"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+## Testing Admin Workflows
+
+<Warning>
+  These endpoints require **Administrator** role authentication.
+</Warning>
+
+### List Available Roles
+
+```json
+GET {{base_url}}/admin/roles
+Authorization: Bearer {{token}}
+Accept: application/json
+
+# Response
+[
+  {"id": 1, "nombre": "Administrador"},
+  {"id": 2, "nombre": "Gerente"},
+  {"id": 3, "nombre": "Cliente"},
+  {"id": 4, "nombre": "Supervisor"},
+  {"id": 5, "nombre": "Vendedor"},
+  {"id": 6, "nombre": "Almacenista"}
+]
+```
+
+### Create Employee Account
+
+```json
+POST {{base_url}}/admin/crear-empleado
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "nombre": "María",
+  "apellido_paterno": "López",
+  "apellido_materno": "Ramírez",
+  "correo": "maria.lopez@solare.com",
+  "contrasena": "SecurePass456",
+  "contrasena_confirmation": "SecurePass456",
+  "rol_id": 6
+}
+
+# Response (201 Created)
+{
+  "message": "Cuenta de personal creada exitosamente",
+  "user": {
+    "id": 20,
+    "nombre": "María",
+    "apellido_paterno": "López",
+    "correo": "maria.lopez@solare.com",
+    "rol": {
+      "id": 6,
+      "nombre": "Almacenista"
+    }
+  }
+}
+```
+
+## Testing Inventory Management
+
+### View Inventory (Staff Only)
+
+```json
+GET {{base_url}}/inventario
+Authorization: Bearer {{token}}
+Accept: application/json
+
+# Required Roles: Admin, Gerente, Supervisor, Vendedor, Almacenista
+```
+
+### Update Stock (Warehouse Staff)
+
+<CodeGroup>
+```json Add Stock (entrada)
+PUT {{base_url}}/inventario/12
+Authorization: Bearer {{token}}
+Content-Type: application/json
+Accept: application/json
+
+{
+  "tipo": "entrada",
+  "cantidad": 50,
+  "motivo": "Recepción de nuevo inventario del proveedor"
+}
+```
+
+```json Remove Stock (salida)
+PUT {{base_url}}/inventario/12
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "tipo": "salida",
+  "cantidad": 5,
+  "motivo": "Productos dañados - baja de inventario"
+}
+```
+
+```json Adjust Stock (ajuste)
+PUT {{base_url}}/inventario/12
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "tipo": "ajuste",
+  "cantidad": 100,
+  "motivo": "Corrección tras auditoría física"
+}
+```
+
+```json Success Response
+{
+  "status": "success",
+  "message": "Inventario actualizado correctamente",
+  "nuevo_stock": 108
+}
+```
+</CodeGroup>
+
+<Note>
+  **Required Roles:** Administrador, Gerente, or Almacenista
+</Note>
+
+## Testing Reports
+
+### Sales Summary (JSON)
+
+```json
+GET {{base_url}}/reportes/ventas
+Authorization: Bearer {{token}}
+Accept: application/json
+
+# Required Roles: Admin, Gerente, Supervisor
+
+# Response
+{
+  "status": "success",
+  "data": {
+    "resumen": {
+      "total_ingresos": 1250000.00,
+      "total_pedidos": 45,
+      "ticket_promedio": 27777.78
+    },
+    "grafica_ventas": [
+      {"mes": 3, "total": 450000.00},
+      {"mes": 2, "total": 380000.00}
+    ],
+    "top_productos": [
+      {
+        "variante_id": 12,
+        "total_vendido": 28,
+        "variante": {
+          "producto": {
+            "nombre": "Sofá Moderno Capitoné"
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+### Export PDF Report
+
+```json
+GET {{base_url}}/reportes/ventas/pdf
+Authorization: Bearer {{token}}
+Accept: application/json
+
+# Downloads: Reporte_Ventas_Solare.pdf
+```
+
+## Organizing Your Collection
+
+Recommended folder structure:
+
+```
+📁 SOLARE API
+  📁 Authentication
+    - POST Register
+    - POST Login (Customer)
+    - POST Login (Admin)
+    - GET Profile
+    - POST Logout
+  📁 Catalog (Public)
+    - GET Categories
+    - GET Products
+    - GET Product Details
+  📁 Orders (Customer)
+    - POST Create Order
+    - GET Order History
+  📁 Admin
+    - GET Roles
+    - POST Create Employee
+    - GET Dashboard
+  📁 Inventory (Staff)
+    - GET View Inventory
+    - PUT Update Stock
+  📁 Reports (Management)
+    - GET Sales Summary
+    - GET Export PDF
+```
+
+## Common Testing Scenarios
+
+<AccordionGroup>
+  <Accordion title="Complete Customer Journey">
+    <Steps>
+      <Step title="Register New Customer">
+        `POST /register` with customer details
+      </Step>
+      <Step title="Browse Catalog">
+        `GET /categorias` and `GET /productos`
+      </Step>
+      <Step title="View Product Details">
+        `GET /productos/{id}` to see variants and stock
+      </Step>
+      <Step title="Place Order">
+        `POST /pedidos` with selected variants
+      </Step>
+      <Step title="Check Order History">
+        `GET /pedidos` to view created order
+      </Step>
+    </Steps>
+  </Accordion>
+  
+  <Accordion title="Admin Creates New Employee">
+    <Steps>
+      <Step title="Login as Admin">
+        `POST /login` with admin credentials
+      </Step>
+      <Step title="Get Available Roles">
+        `GET /admin/roles`
+      </Step>
+      <Step title="Create Employee">
+        `POST /admin/crear-empleado` with role_id
+      </Step>
+      <Step title="Verify Creation">
+        Use new employee credentials to login
+      </Step>
+    </Steps>
+  </Accordion>
+  
+  <Accordion title="Warehouse Stock Management">
+    <Steps>
+      <Step title="Login as Almacenista">
+        Use warehouse staff credentials
+      </Step>
+      <Step title="View Current Inventory">
+        `GET /inventario`
+      </Step>
+      <Step title="Add New Stock">
+        `PUT /inventario/{id}` with tipo: "entrada"
+      </Step>
+      <Step title="Verify Update">
+        `GET /inventario` to confirm new stock level
+      </Step>
+    </Steps>
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="401 Unauthorized">
+    **Cause:** Missing or invalid authentication token
+    
+    **Solutions:**
+    - Ensure you've logged in and the token is saved
+    - Check that Authorization header is set: `Bearer {{token}}`
+    - Token may have expired - login again
+    - Verify the `Accept: application/json` header is present
+  </Accordion>
+  
+  <Accordion title="403 Forbidden">
+    **Cause:** User doesn't have required role permissions
+    
+    **Solutions:**
+    - Check the endpoint's required roles in the [User Roles guide](/guides/user-roles)
+    - Login with an account that has appropriate permissions
+    - For admin endpoints, use `admin@solare.com`
+    - For customer endpoints, use `cliente@solare.com`
+  </Accordion>
+  
+  <Accordion title="422 Validation Error">
+    **Cause:** Request body doesn't meet validation requirements
+    
+    **Solutions:**
+    - Check the error response for specific field issues
+    - Ensure required fields are included
+    - Verify email format and uniqueness
+    - Password must be minimum 8 characters
+    - `contrasena_confirmation` must match `contrasena`
+  </Accordion>
+  
+  <Accordion title="404 Not Found">
+    **Cause:** Resource doesn't exist or wrong endpoint
+    
+    **Solutions:**
+    - Verify the endpoint URL is correct
+    - Check that the resource ID exists (product, variant, etc.)
+    - Ensure base URL includes `/api`
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="User Roles" icon="users" href="/guides/user-roles">
+    Learn about role-based access control
+  </Card>
+  
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Understand error responses and validation
+  </Card>
+  
+  <Card title="Response Codes" icon="code" href="/guides/response-codes">
+    HTTP status codes reference
+  </Card>
+  
+  <Card title="API Reference" icon="book" href="/api/auth/login">
+    Complete endpoint documentation
+  </Card>
+</CardGroup>

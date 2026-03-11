@@ -1,0 +1,213 @@
+---
+title: "List All Roles"
+api: "GET /api/admin/roles"
+description: "Retrieve a complete list of all available system roles"
+---
+
+## Overview
+
+This endpoint returns all role records from the system's `roles` table. It is primarily used to populate role selection dropdowns when creating employee accounts or managing user permissions.
+
+The roles define the permission levels and access control within the SOLARE system:
+- **Administrador** - Full system access
+- **Gerente** - Management-level access to reports and inventory
+- **Cliente** - Customer access for ordering products
+- **Supervisor** - Supervisory access to reports and monitoring
+- **Vendedor** - Sales staff access to orders and catalog
+- **Almacenista** - Warehouse staff access to inventory management
+
+## Authentication
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token for authentication. User must have the **Administrador** role.
+</ParamField>
+
+<Warning>
+  This endpoint is restricted to administrators only. It returns sensitive role information used for access control configuration.
+</Warning>
+
+## Response
+
+Returns an array of all role objects.
+
+<ResponseField name="[]" type="array">
+  Array of role objects
+  
+  <Expandable title="array items">
+    <ResponseField name="id" type="number">
+      Unique role identifier
+    </ResponseField>
+    
+    <ResponseField name="nombre" type="string">
+      Role name (e.g., "Administrador", "Gerente", "Cliente", "Supervisor", "Vendedor", "Almacenista")
+    </ResponseField>
+    
+    <ResponseField name="descripcion" type="string | null">
+      Optional description of the role's purpose and permissions
+    </ResponseField>
+    
+    <ResponseField name="creado_en" type="string">
+      Timestamp when the role was created
+    </ResponseField>
+    
+    <ResponseField name="actualizado_en" type="string">
+      Timestamp when the role was last updated
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X GET https://api.solare.com/api/admin/roles \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Accept: application/json"
+```
+
+## Example Response
+
+```json
+[
+  {
+    "id": 1,
+    "nombre": "Administrador",
+    "descripcion": "Acceso completo al sistema",
+    "creado_en": "2026-01-15T10:00:00.000000Z",
+    "actualizado_en": "2026-01-15T10:00:00.000000Z"
+  },
+  {
+    "id": 2,
+    "nombre": "Gerente",
+    "descripcion": "Gestión de inventario, reportes y supervisión",
+    "creado_en": "2026-01-15T10:00:00.000000Z",
+    "actualizado_en": "2026-01-15T10:00:00.000000Z"
+  },
+  {
+    "id": 3,
+    "nombre": "Cliente",
+    "descripcion": "Usuario cliente con acceso a catálogo y pedidos",
+    "creado_en": "2026-01-15T10:00:00.000000Z",
+    "actualizado_en": "2026-01-15T10:00:00.000000Z"
+  },
+  {
+    "id": 4,
+    "nombre": "Supervisor",
+    "descripcion": "Supervisión de operaciones y acceso a reportes",
+    "creado_en": "2026-01-15T10:00:00.000000Z",
+    "actualizado_en": "2026-01-15T10:00:00.000000Z"
+  },
+  {
+    "id": 5,
+    "nombre": "Vendedor",
+    "descripcion": "Personal de ventas con acceso a catálogo y pedidos",
+    "creado_en": "2026-01-15T10:00:00.000000Z",
+    "actualizado_en": "2026-01-15T10:00:00.000000Z"
+  },
+  {
+    "id": 6,
+    "nombre": "Almacenista",
+    "descripcion": "Personal de almacén con acceso a gestión de inventario",
+    "creado_en": "2026-01-15T10:00:00.000000Z",
+    "actualizado_en": "2026-01-15T10:00:00.000000Z"
+  }
+]
+```
+
+## Error Responses
+
+### 401 Unauthorized
+
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
+Returned when:
+- No Authorization header is provided
+- The Bearer token is invalid or expired
+
+### 403 Forbidden
+
+```json
+{
+  "message": "No tiene permisos para acceder a este recurso."
+}
+```
+
+Returned when the authenticated user does not have the Administrador role.
+
+## Implementation Notes
+
+- Returns all records from the `roles` table without filtering
+- No pagination is applied (assumes a small, fixed number of roles)
+- Results are returned in the order they exist in the database
+- Controller location: `app/Http/Controllers/Auth/AuthController.php:72`
+- Route defined at: `routes/api.php:30`
+- Protected by both `auth:sanctum` and `role:Administrador` middleware
+
+## Use Cases
+
+### Employee Creation Form
+
+Use this endpoint to populate a role selection dropdown when creating employee accounts:
+
+```javascript
+fetch('https://api.solare.com/api/admin/roles', {
+  headers: {
+    'Authorization': 'Bearer YOUR_ACCESS_TOKEN',
+    'Accept': 'application/json'
+  }
+})
+.then(response => response.json())
+.then(roles => {
+  // Exclude Cliente role from employee creation
+  const employeeRoles = roles.filter(role => role.nombre !== 'Cliente');
+  
+  // Populate select dropdown
+  const select = document.getElementById('role-select');
+  employeeRoles.forEach(role => {
+    const option = document.createElement('option');
+    option.value = role.id;
+    option.textContent = role.nombre;
+    select.appendChild(option);
+  });
+});
+```
+
+### Role-Based Access Control
+
+Use the role IDs to configure permission checks in your application:
+
+```javascript
+const ROLES = {
+  ADMIN: 1,
+  MANAGER: 2,
+  CUSTOMER: 3,
+  SUPERVISOR: 4,
+  SALESPERSON: 5,
+  WAREHOUSE: 6
+};
+
+function canAccessReports(userRoleId) {
+  return [ROLES.ADMIN, ROLES.MANAGER, ROLES.SUPERVISOR].includes(userRoleId);
+}
+
+function canManageInventory(userRoleId) {
+  return [ROLES.ADMIN, ROLES.MANAGER, ROLES.WAREHOUSE].includes(userRoleId);
+}
+```
+
+## Database Schema
+
+The `roles` table structure:
+
+```sql
+CREATE TABLE roles (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  nombre VARCHAR(50) NOT NULL UNIQUE,
+  descripcion TEXT NULL,
+  creado_en TIMESTAMP NULL,
+  actualizado_en TIMESTAMP NULL
+);
+```

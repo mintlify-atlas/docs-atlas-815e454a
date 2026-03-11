@@ -1,80 +1,356 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: 'Quickstart'
+description: 'Make your first API request to SOLARE in minutes'
+icon: 'rocket'
 ---
 
-## Get started in three steps
-
-Get your documentation site running locally and make your first customization.
-
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+Get started with the SOLARE API by making your first requests. This guide will walk you through authentication, browsing products, and creating an order.
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+  **Base URL**: `http://127.0.0.1:8000/api`
+  
+  All requests must include the header: `Accept: application/json`
 </Note>
+
+## Prerequisites
+
+Before you begin, ensure you have:
+- The SOLARE API server running locally (`php artisan serve`)
+- A tool to make HTTP requests (Postman, cURL, or similar)
+- Test credentials (provided below)
+
+## Test Accounts
+
+Use these seeded accounts for testing:
+
+| Role | Email | Password |
+|------|-------|----------|
+| **Administrator** | `admin@solare.com` | `password123` |
+| **Customer** | `cliente@solare.com` | `password123` |
+
+<Steps>
+  <Step title="Authenticate and Get Your Token">
+    Start by logging in to obtain a Bearer token. You'll need this token for all authenticated requests.
+
+    <CodeGroup>
+    ```bash cURL
+    curl -X POST http://127.0.0.1:8000/api/login \
+      -H "Accept: application/json" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "correo": "cliente@solare.com",
+        "contrasena": "password123"
+      }'
+    ```
+
+    ```javascript JavaScript
+    const response = await fetch('http://127.0.0.1:8000/api/login', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        correo: 'cliente@solare.com',
+        contrasena: 'password123'
+      })
+    });
+
+    const data = await response.json();
+    console.log(data.access_token);
+    ```
+
+    ```python Python
+    import requests
+
+    response = requests.post(
+        'http://127.0.0.1:8000/api/login',
+        headers={'Accept': 'application/json'},
+        json={
+            'correo': 'cliente@solare.com',
+            'contrasena': 'password123'
+        }
+    )
+
+    data = response.json()
+    token = data['access_token']
+    ```
+    </CodeGroup>
+
+    **Response** (200 OK):
+    ```json
+    {
+      "message": "Inicio de sesión exitoso",
+      "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+      "token_type": "Bearer",
+      "user": {
+        "id": 2,
+        "nombre": "Cliente",
+        "apellido_paterno": "Prueba",
+        "correo": "cliente@solare.com",
+        "rol": "Cliente"
+      }
+    }
+    ```
+
+    <Note>
+      Save the `access_token` value. You'll use it in the `Authorization` header for subsequent requests.
+    </Note>
+  </Step>
+
+  <Step title="Browse the Product Catalog">
+    Explore available products without authentication. The catalog endpoint returns all active products with their variants, materials, and images.
+
+    <CodeGroup>
+    ```bash cURL
+    curl -X GET http://127.0.0.1:8000/api/productos \
+      -H "Accept: application/json"
+    ```
+
+    ```javascript JavaScript
+    const response = await fetch('http://127.0.0.1:8000/api/productos', {
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+
+    const products = await response.json();
+    ```
+
+    ```python Python
+    response = requests.get(
+        'http://127.0.0.1:8000/api/productos',
+        headers={'Accept': 'application/json'}
+    )
+
+    products = response.json()
+    ```
+    </CodeGroup>
+
+    **Response** (200 OK):
+    ```json
+    {
+      "status": "success",
+      "data": [
+        {
+          "id": 1,
+          "nombre": "Sofá Modular Florence",
+          "descripcion": "Sofá de lujo con diseño modular y acabados premium",
+          "precio_base": 45000.00,
+          "activo": 1,
+          "categoria": {
+            "id": 1,
+            "nombre": "Salas"
+          },
+          "variantes": [
+            {
+              "id": 1,
+              "color": "Gris Plata",
+              "precio_adicional": 0.00,
+              "stock": 5,
+              "material": {
+                "id": 1,
+                "nombre": "Terciopelo"
+              }
+            },
+            {
+              "id": 2,
+              "color": "Azul Marino",
+              "precio_adicional": 2500.00,
+              "stock": 3,
+              "material": {
+                "id": 1,
+                "nombre": "Terciopelo"
+              }
+            }
+          ],
+          "imagenes": [
+            {
+              "id": 1,
+              "ruta_imagen": "/storage/productos/sofa-florence-01.jpg",
+              "es_principal": 1
+            }
+          ]
+        }
+      ]
+    }
+    ```
+
+    <Tip>
+      The `precio_base` plus `precio_adicional` from the variant gives you the final product price.
+    </Tip>
+  </Step>
+
+  <Step title="Get Product Details">
+    Retrieve detailed information about a specific product by its ID.
+
+    ```bash cURL
+    curl -X GET http://127.0.0.1:8000/api/productos/1 \
+      -H "Accept: application/json"
+    ```
+
+    This returns the same structure as the catalog, but for a single product with all its variants and related data.
+  </Step>
+
+  <Step title="Create Your First Order">
+    Now let's place an order using your authentication token. You'll need the `variante_id` from the products you want to order.
+
+    <CodeGroup>
+    ```bash cURL
+    curl -X POST http://127.0.0.1:8000/api/pedidos \
+      -H "Accept: application/json" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+      -d '{
+        "productos": [
+          {
+            "variante_id": 1,
+            "cantidad": 2
+          },
+          {
+            "variante_id": 3,
+            "cantidad": 1
+          }
+        ],
+        "direccion_id": null,
+        "notas": "Entrega en horario de oficina"
+      }'
+    ```
+
+    ```javascript JavaScript
+    const response = await fetch('http://127.0.0.1:8000/api/pedidos', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({
+        productos: [
+          { variante_id: 1, cantidad: 2 },
+          { variante_id: 3, cantidad: 1 }
+        ],
+        direccion_id: null,
+        notas: 'Entrega en horario de oficina'
+      })
+    });
+
+    const order = await response.json();
+    ```
+
+    ```python Python
+    response = requests.post(
+        'http://127.0.0.1:8000/api/pedidos',
+        headers={
+            'Accept': 'application/json',
+            'Authorization': f'Bearer {token}'
+        },
+        json={
+            'productos': [
+                {'variante_id': 1, 'cantidad': 2},
+                {'variante_id': 3, 'cantidad': 1}
+            ],
+            'direccion_id': None,
+            'notas': 'Entrega en horario de oficina'
+        }
+    )
+
+    order = response.json()
+    ```
+    </CodeGroup>
+
+    **Response** (201 Created):
+    ```json
+    {
+      "status": "success",
+      "message": "Pedido creado exitosamente",
+      "pedido_id": 1
+    }
+    ```
+
+    <Warning>
+      The order creation automatically deducts stock from inventory via database triggers. Ensure the variants have sufficient stock before placing orders.
+    </Warning>
+  </Step>
+
+  <Step title="View Your Order History">
+    Retrieve all orders for the authenticated customer.
+
+    ```bash cURL
+    curl -X GET http://127.0.0.1:8000/api/pedidos \
+      -H "Accept: application/json" \
+      -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+    ```
+
+    **Response** (200 OK):
+    ```json
+    {
+      "status": "success",
+      "data": [
+        {
+          "id": 1,
+          "fecha_pedido": "2026-03-11 14:30:00",
+          "estado_pago": "pendiente",
+          "estado_envio": "procesando",
+          "notas": "Entrega en horario de oficina",
+          "detalles": [
+            {
+              "id": 1,
+              "cantidad": 2,
+              "precio_unitario": 45000.00,
+              "variante": {
+                "id": 1,
+                "color": "Gris Plata",
+                "producto": {
+                  "id": 1,
+                  "nombre": "Sofá Modular Florence"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+    ```
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="book" href="/api/auth/login">
+    Explore all available endpoints and their parameters
+  </Card>
+  <Card title="Authentication" icon="lock" href="/architecture/authentication">
+    Learn about token management and security
+  </Card>
+  <Card title="User Roles" icon="users" href="/guides/user-roles">
+    Understand role-based access control
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle errors and edge cases gracefully
+  </Card>
+</CardGroup>
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="401 Unauthorized - Token is invalid or expired">
+    Your authentication token may have expired or is malformed. Request a new token by logging in again using the `/api/login` endpoint.
+  </Accordion>
+
+  <Accordion title="403 Forbidden - User does not have the required role">
+    The endpoint you're trying to access requires a specific role. For example, only customers can create orders, and only administrators can create employee accounts.
+  </Accordion>
+
+  <Accordion title="422 Unprocessable Entity - Validation errors">
+    Your request body is missing required fields or contains invalid data. Check the response message for specific validation errors.
+  </Accordion>
+
+  <Accordion title="500 Internal Server Error - Database or server issue">
+    Check that:
+    - The database is running and accessible
+    - The `.env` file is properly configured
+    - All migrations and seeders have been executed
+  </Accordion>
+</AccordionGroup>

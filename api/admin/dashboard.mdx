@@ -1,0 +1,104 @@
+---
+title: "Admin Dashboard"
+api: "GET /api/admin/dashboard"
+description: "Access the administrator dashboard"
+---
+
+## Overview
+
+This endpoint provides access to the administrator dashboard. It serves as a simple authentication check to verify admin access and can be extended to return dashboard statistics and metrics.
+
+Currently, this is a basic endpoint that returns a welcome message for administrators. It can be expanded to include:
+- System statistics
+- Recent activity logs
+- Quick access metrics
+- User management summaries
+
+## Authentication
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token for authentication. User must have the **Administrador** role.
+</ParamField>
+
+<Warning>
+  This endpoint is restricted to Administrador role only. Gerente, Supervisor, and other roles will receive a 403 Forbidden error.
+</Warning>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Welcome message for administrators: "Bienvenido, Administrador"
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X GET https://api.solare.com/api/admin/dashboard \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Accept: application/json"
+```
+
+## Example Response
+
+```json
+{
+  "message": "Bienvenido, Administrador"
+}
+```
+
+## Error Responses
+
+### 401 Unauthorized
+
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
+Returned when:
+- No Authorization header is provided
+- The Bearer token is invalid or expired
+
+### 403 Forbidden
+
+```json
+{
+  "message": "No tiene permisos para acceder a este recurso."
+}
+```
+
+Returned when the authenticated user does not have the Administrador role. Users with Gerente, Supervisor, Vendedor, Almacenista, or Cliente roles cannot access this endpoint.
+
+## Implementation Notes
+
+- This is a simple closure route defined directly in `routes/api.php:27`
+- Protected by `auth:sanctum` middleware for authentication
+- Protected by `role:Administrador` middleware for authorization
+- Can be expanded to include dashboard statistics by creating a dedicated controller method
+
+## Future Enhancements
+
+This endpoint is a placeholder that can be enhanced to return:
+
+```json
+{
+  "message": "Bienvenido, Administrador",
+  "statistics": {
+    "total_users": 156,
+    "total_orders": 847,
+    "pending_orders": 23,
+    "total_revenue": 458900.50,
+    "low_stock_items": 8
+  },
+  "recent_activity": [
+    {
+      "type": "order",
+      "description": "Nuevo pedido #1234",
+      "timestamp": "2026-03-11T14:32:00Z"
+    }
+  ]
+}
+```
+
+Consider creating a dedicated `AdminController` with a `dashboard()` method for more comprehensive functionality.

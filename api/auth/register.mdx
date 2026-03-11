@@ -1,0 +1,168 @@
+---
+title: 'Register'
+api: 'POST /api/register'
+---
+
+Registers a new user account with the "Cliente" (Customer) role. This endpoint creates both a user record and an associated customer profile, then returns an access token for immediate authentication.
+
+## Request Body
+
+<ParamField body="nombre" type="string" required>
+  User's first name. Maximum 100 characters.
+</ParamField>
+
+<ParamField body="apellido_paterno" type="string" required>
+  User's paternal last name. Maximum 100 characters.
+</ParamField>
+
+<ParamField body="apellido_materno" type="string">
+  User's maternal last name (optional).
+</ParamField>
+
+<ParamField body="correo" type="string" required>
+  User's email address. Must be unique and a valid email format.
+</ParamField>
+
+<ParamField body="contrasena" type="string" required>
+  User's password. Minimum 8 characters.
+</ParamField>
+
+<ParamField body="contrasena_confirmation" type="string" required>
+  Password confirmation. Must match the `contrasena` field.
+</ParamField>
+
+<ParamField body="telefono" type="string" required>
+  User's phone number. Maximum 20 characters.
+</ParamField>
+
+## Response
+
+<ResponseField name="message" type="string">
+  Success message confirming user registration.
+</ResponseField>
+
+<ResponseField name="access_token" type="string">
+  OAuth access token generated using Laravel Passport. The user is automatically authenticated upon registration.
+</ResponseField>
+
+<ResponseField name="token_type" type="string">
+  Token type, always "Bearer".
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  The newly created user object with role information.
+  
+  <ResponseField name="user.id" type="integer">
+    User's unique identifier.
+  </ResponseField>
+  
+  <ResponseField name="user.nombre" type="string">
+    User's first name.
+  </ResponseField>
+  
+  <ResponseField name="user.apellido_paterno" type="string">
+    User's paternal last name.
+  </ResponseField>
+  
+  <ResponseField name="user.apellido_materno" type="string|null">
+    User's maternal last name.
+  </ResponseField>
+  
+  <ResponseField name="user.correo" type="string">
+    User's email address.
+  </ResponseField>
+  
+  <ResponseField name="user.rol_id" type="integer">
+    User's role ID.
+  </ResponseField>
+  
+  <ResponseField name="user.rol" type="object">
+    User's role details.
+    
+    <ResponseField name="user.rol.id" type="integer">
+      Role ID.
+    </ResponseField>
+    
+    <ResponseField name="user.rol.nombre" type="string">
+      Role name (will be "Cliente" for registrations).
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X POST https://api.solare.com/api/register \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "nombre": "Juan",
+    "apellido_paterno": "Pérez",
+    "apellido_materno": "García",
+    "correo": "juan.perez@example.com",
+    "contrasena": "SecurePass123!",
+    "contrasena_confirmation": "SecurePass123!",
+    "telefono": "+52 55 1234 5678"
+  }'
+```
+
+## Example Response
+
+```json
+{
+  "message": "Usuario registrado exitosamente como Cliente",
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...",
+  "token_type": "Bearer",
+  "user": {
+    "id": 15,
+    "nombre": "Juan",
+    "apellido_paterno": "Pérez",
+    "apellido_materno": "García",
+    "correo": "juan.perez@example.com",
+    "rol_id": 3,
+    "rol": {
+      "id": 3,
+      "nombre": "Cliente"
+    }
+  }
+}
+```
+
+## Error Responses
+
+### Validation Error (422)
+
+```json
+{
+  "message": "The given data was invalid.",
+  "errors": {
+    "correo": [
+      "The correo has already been taken."
+    ],
+    "contrasena": [
+      "The contrasena must be at least 8 characters.",
+      "The contrasena confirmation does not match."
+    ],
+    "telefono": [
+      "The telefono field is required."
+    ]
+  }
+}
+```
+
+### Server Error (500)
+
+```json
+{
+  "message": "Error al registrar usuario",
+  "error": "Database connection failed"
+}
+```
+
+<Note>
+  Upon successful registration, the user is automatically authenticated and receives an access token. This token can be used immediately for authenticated API requests.
+</Note>
+
+<Warning>
+  The `contrasena_confirmation` field must exactly match the `contrasena` field, or the validation will fail.
+</Warning>

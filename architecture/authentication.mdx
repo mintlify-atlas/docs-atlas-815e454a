@@ -1,0 +1,601 @@
+---
+title: 'Authentication'
+description: 'Laravel Passport OAuth2 implementation and token-based authentication flow'
+icon: 'shield-halved'
+---
+
+## Overview
+
+SOLARE API uses **Laravel Passport** for OAuth2-based authentication, providing secure token-based access to protected endpoints. Despite some route definitions referencing Sanctum, the actual authentication mechanism is Passport.
+
+<Note>
+The API supports both **public endpoints** (product catalog) and **protected endpoints** (orders, admin functions) secured via Bearer tokens.
+</Note>
+
+## Authentication Architecture
+
+### Passport Configuration
+
+Passport is configured in `config/passport.php`:
+
+```php config/passport.php
+return [
+    'guard' => 'web',
+    'middleware' => [],
+    'private_key' => env('PASSPORT_PRIVATE_KEY'),
+    'public_key' => env('PASSPORT_PUBLIC_KEY'),
+    'connection' => env('PASSPORT_CONNECTION'),
+];
+```
+
+### User Model Integration
+
+The `User` model uses the `HasApiTokens` trait from Passport:
+
+```php app/Models/User.php
+use Laravel\Passport\HasApiTokens;
+
+class User extends Authenticatable
+{
+    use HasFactory, Notifiable, HasApiTokens;
+    
+    protected $table = 'usuarios';
+    
+    // Custom password field mapping
+    public function getAuthPassword() {
+        return $this->contrasena;
+    }
+    
+    public function getEmailForPasswordReset() {
+        return $this->correo;
+    }
+}
+```
+
+<Info>
+The model overrides `getAuthPassword()` to use the Spanish column name `contrasena` instead of Laravel's default `password` field.
+</Info>
+
+## Authentication Flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant API
+    participant AuthController
+    participant Database
+    participant Passport
+    
+    Client->>API: POST /api/login
+    API->>AuthController: login(email, password)
+    AuthController->>Database: Find user by email
+    Database->>AuthController: User record
+    AuthController->>AuthController: Hash::check(password)
+    AuthController->>Passport: createToken('SolareToken')
+    Passport->>Database: Store oauth_access_tokens
+    Passport->>AuthController: AccessToken object
+    AuthController->>Client: JSON with access_token
+    
+    Client->>API: GET /api/profile (Bearer Token)
+    API->>Passport: Validate token
+    Passport->>Database: Query oauth_access_tokens
+    Database->>Passport: Token valid
+    Passport->>API: Authenticated User
+    API->>Client: User profile data
+```
+
+## Authentication Endpoints
+
+### 1. User Registration (Public)
+
+**Endpoint:** `POST /api/register`
+
+Creates a new customer account with automatic role assignment.
+
+```php app/Http/Controllers/Auth/AuthController.php
+public function register(Request $request)
+{
+    $request->validate([
+        'nombre' => 'required|string|max:100',
+        'apellido_paterno' => 'required|string|max:100',
+        'correo' => 'required|email|unique:usuarios,correo',
+        'contrasena' => 'required|string|min:8|confirmed',
+        'telefono' => 'required|string|max:20',
+    ]);
+    
+    return DB::transaction(function () use ($request) {
+        // 1. Find Cliente role
+        $rolCliente = Rol::where('nombre', 'Cliente')->first();
+        
+        // 2. Create user
+        $user = User::create([
+            'nombre' => $request->nombre,
+            'apellido_paterno' => $request->apellido_paterno,
+            'apellido_materno' => $request->apellido_materno,
+            'correo' => $request->correo,
+            'contrasena' => Hash::make($request->contrasena),
+            'rol_id' => $rolCliente->id ?? 3,
+        ]);
+        
+        // 3. Create customer profile
+        Cliente::create([
+            'usuario_id' => $user->id,
+            'telefono' => $request->telefono,
+        ]);
+        
+        // 4. Generate Passport token
+        $token = $user->createToken('SolareToken')->accessToken;
+        
+        return response()->json([
+            'message' => 'Usuario registrado exitosamente como Cliente',
+            'access_token' => $token,
+            'token_type' => 'Bearer',
+            'user' => $user->load('rol')
+        ], 201);
+    });
+}
+```
+
+**Request Example:**
+
+```json
+{
+  "nombre": "Juan",
+  "apellido_paterno": "Pérez",
+  "apellido_materno": "García",
+  "correo": "juan.perez@example.com",
+  "contrasena": "password123",
+  "contrasena_confirmation": "password123",
+  "telefono": "+52 33 1234 5678"
+}
+```
+
+**Response:**
+
+```json
+{
+  "message": "Usuario registrado exitosamente como Cliente",
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...",
+  "token_type": "Bearer",
+  "user": {
+    "id": 5,
+    "nombre": "Juan",
+    "apellido_paterno": "Pérez",
+    "correo": "juan.perez@example.com",
+    "rol": {
+      "id": 3,
+      "nombre": "Cliente"
+    }
+  }
+}
+```
+
+<Warning>
+Password confirmation is validated via Laravel's `confirmed` rule, which looks for `contrasena_confirmation` in the request.
+</Warning>
+
+### 2. User Login (Public)
+
+**Endpoint:** `POST /api/login`
+
+Authenticates existing users and returns a Bearer token.
+
+```php app/Http/Controllers/Auth/AuthController.php
+public function login(Request $request)
+{
+    $request->validate([
+        'correo' => 'required|email',
+        'contrasena' => 'required',
+    ]);
+    
+    $user = User::with('rol')
+        ->where('correo', $request->correo)
+        ->first();
+    
+    if (!$user || !Hash::check($request->contrasena, $user->contrasena)) {
+        throw ValidationException::withMessages([
+            'correo' => ['Las credenciales proporcionadas son incorrectas.'],
+        ]);
+    }
+    
+    // Create Passport token
+    $token = $user->createToken('SolareToken')->accessToken;
+    
+    return response()->json([
+        'message' => 'Inicio de sesión exitoso',
+        'access_token' => $token,
+        'token_type' => 'Bearer',
+        'user' => [
+            'id' => $user->id,
+            'nombre' => $user->nombre,
+            'apellido_paterno' => $user->apellido_paterno,
+            'correo' => $user->correo,
+            'rol' => $user->rol->nombre
+        ]
+    ]);
+}
+```
+
+**Request Example:**
+
+```json
+{
+  "correo": "admin@solare.com",
+  "contrasena": "password123"
+}
+```
+
+**Response:**
+
+```json
+{
+  "message": "Inicio de sesión exitoso",
+  "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...",
+  "token_type": "Bearer",
+  "user": {
+    "id": 1,
+    "nombre": "Admin",
+    "apellido_paterno": "Solare",
+    "correo": "admin@solare.com",
+    "rol": "Administrador"
+  }
+}
+```
+
+### 3. User Logout (Protected)
+
+**Endpoint:** `POST /api/logout`
+
+Revokes the current access token.
+
+```php app/Http/Controllers/Auth/AuthController.php
+public function logout(Request $request)
+{
+    $request->user()->token()->revoke();
+    
+    return response()->json([
+        'message' => 'Sesión cerrada exitosamente'
+    ]);
+}
+```
+
+**Headers Required:**
+
+```http
+Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9...
+```
+
+### 4. Get User Profile (Protected)
+
+**Endpoint:** `GET /api/profile`
+
+Returns authenticated user's information.
+
+```php app/Http/Controllers/Auth/AuthController.php
+public function profile(Request $request)
+{
+    return response()->json($request->user()->load('rol'));
+}
+```
+
+**Response:**
+
+```json
+{
+  "id": 1,
+  "nombre": "Admin",
+  "apellido_paterno": "Solare",
+  "apellido_materno": null,
+  "correo": "admin@solare.com",
+  "rol_id": 1,
+  "creado_en": "2026-03-10T12:00:00.000000Z",
+  "actualizado_en": "2026-03-10T12:00:00.000000Z",
+  "rol": {
+    "id": 1,
+    "nombre": "Administrador",
+    "descripcion": "Control total del sistema"
+  }
+}
+```
+
+## Protected Routes
+
+Routes are protected using the `auth:sanctum` middleware (despite using Passport):
+
+```php routes/api.php
+// Public routes
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register']);
+Route::get('/productos', [ProductoController::class, 'index']);
+
+// Protected routes
+Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/profile', [AuthController::class, 'profile']);
+    
+    Route::get('/pedidos', [PedidoController::class, 'index']);
+    Route::post('/pedidos', [PedidoController::class, 'store']);
+});
+```
+
+<Note>
+While routes use `auth:sanctum`, the actual tokens are Passport tokens. This works because both packages use similar token storage mechanisms.
+</Note>
+
+## Token Usage
+
+### Making Authenticated Requests
+
+All protected endpoints require the `Authorization` header:
+
+```bash
+curl -X GET "http://localhost:8000/api/profile" \
+  -H "Accept: application/json" \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9..."
+```
+
+### Token Storage (Client-Side)
+
+Clients should securely store the access token:
+
+<Tabs>
+  <Tab title="Web (localStorage)">
+    ```javascript
+    // After login
+    const { access_token } = await loginResponse.json();
+    localStorage.setItem('solare_token', access_token);
+    
+    // For subsequent requests
+    const token = localStorage.getItem('solare_token');
+    fetch('/api/pedidos', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      }
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Mobile (Secure Storage)">
+    ```swift
+    // iOS - Keychain
+    KeychainWrapper.standard.set(accessToken, forKey: "solare_token")
+    
+    // Android - EncryptedSharedPreferences
+    val sharedPreferences = EncryptedSharedPreferences.create(
+        "secure_prefs",
+        masterKey,
+        context,
+        // ...
+    )
+    sharedPreferences.edit().putString("solare_token", accessToken).apply()
+    ```
+  </Tab>
+  
+  <Tab title="Postman">
+    1. Go to Authorization tab
+    2. Type: Bearer Token
+    3. Token: Paste the access_token from login response
+    4. Postman will automatically add the header to requests
+  </Tab>
+</Tabs>
+
+## OAuth2 Database Tables
+
+Passport creates several tables for token management:
+
+| Table | Purpose |
+|-------|----------|
+| `oauth_access_tokens` | Active access tokens |
+| `oauth_auth_codes` | Authorization codes (not used in password grant) |
+| `oauth_clients` | OAuth2 client applications |
+| `oauth_refresh_tokens` | Refresh tokens for long-lived sessions |
+| `oauth_personal_access_clients` | Personal access clients |
+
+### Access Token Structure
+
+Tokens stored in `oauth_access_tokens`:
+
+```sql
+CREATE TABLE oauth_access_tokens (
+    id VARCHAR(100) PRIMARY KEY,
+    user_id BIGINT UNSIGNED,
+    client_id BIGINT UNSIGNED,
+    name VARCHAR(255),
+    scopes TEXT,
+    revoked TINYINT(1) DEFAULT 0,
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    expires_at DATETIME
+);
+```
+
+## Employee Account Creation
+
+Administrators can create employee accounts with specific roles:
+
+```php app/Http/Controllers/Auth/AuthController.php
+public function storeEmployee(Request $request)
+{
+    $request->validate([
+        'nombre' => 'required|string|max:100',
+        'apellido_paterno' => 'required|string|max:100',
+        'correo' => 'required|email|unique:usuarios,correo',
+        'contrasena' => 'required|string|min:8|confirmed',
+        'rol_id' => 'required|exists:roles,id',
+    ]);
+    
+    // Prevent creating Cliente via this route
+    $rolCliente = Rol::where('nombre', 'Cliente')->first();
+    if ($request->rol_id == $rolCliente->id) {
+        return response()->json([
+            'message' => 'Para crear clientes use la ruta de registro pública'
+        ], 400);
+    }
+    
+    $user = User::create([
+        'nombre' => $request->nombre,
+        'apellido_paterno' => $request->apellido_paterno,
+        'apellido_materno' => $request->apellido_materno,
+        'correo' => $request->correo,
+        'contrasena' => Hash::make($request->contrasena),
+        'rol_id' => $request->rol_id,
+    ]);
+    
+    return response()->json([
+        'message' => 'Cuenta de personal creada exitosamente',
+        'user' => $user->load('rol')
+    ], 201);
+}
+```
+
+**Route Protection:**
+
+```php routes/api.php
+Route::middleware(['auth:sanctum', 'role:Administrador'])->group(function () {
+    Route::post('/admin/crear-empleado', [AuthController::class, 'storeEmployee']);
+});
+```
+
+## Security Considerations
+
+<AccordionGroup>
+  <Accordion title="Password Hashing">
+    Passwords are hashed using Laravel's default bcrypt algorithm:
+    
+    ```php
+    'contrasena' => Hash::make($request->contrasena)
+    ```
+    
+    The User model automatically casts the `contrasena` field:
+    
+    ```php
+    protected function casts(): array {
+        return ['contrasena' => 'hashed'];
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Token Expiration">
+    Passport tokens have configurable expiration (default: 1 year).
+    
+    Configure in `config/passport.php` or `AuthServiceProvider`:
+    
+    ```php
+    Passport::tokensExpireIn(now()->addDays(15));
+    Passport::refreshTokensExpireIn(now()->addDays(30));
+    ```
+  </Accordion>
+  
+  <Accordion title="HTTPS Requirement">
+    <Warning>
+    **Production:** Always use HTTPS to prevent token interception.
+    </Warning>
+    
+    Bearer tokens transmitted over HTTP are vulnerable to man-in-the-middle attacks.
+  </Accordion>
+  
+  <Accordion title="Token Revocation">
+    Tokens can be manually revoked:
+    
+    ```php
+    // Revoke current token
+    $request->user()->token()->revoke();
+    
+    // Revoke all user tokens
+    $user->tokens->each(function ($token) {
+        $token->revoke();
+    });
+    ```
+  </Accordion>
+  
+  <Accordion title="Rate Limiting">
+    Laravel includes default rate limiting middleware:
+    
+    ```php
+    Route::middleware('throttle:60,1')->group(function () {
+        Route::post('/login', [AuthController::class, 'login']);
+    });
+    ```
+    
+    This allows 60 requests per minute per IP.
+  </Accordion>
+</AccordionGroup>
+
+## Error Responses
+
+### 401 Unauthorized
+
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
+**Causes:**
+- Missing `Authorization` header
+- Invalid/expired token
+- Malformed Bearer token
+
+### 422 Validation Error
+
+```json
+{
+  "message": "The correo has already been taken.",
+  "errors": {
+    "correo": [
+      "The correo has already been taken."
+    ]
+  }
+}
+```
+
+### 403 Forbidden
+
+```json
+{
+  "message": "Sin permisos de acceso"
+}
+```
+
+Returned when authenticated but lacking required role permissions.
+
+## Testing Authentication
+
+### Seeded Test Accounts
+
+```php database/seeders/UsuariosPruebaSeeder.php
+DB::table('usuarios')->insert([
+    'nombre' => 'Admin',
+    'apellido_paterno' => 'Solare',
+    'correo' => 'admin@solare.com',
+    'contrasena' => Hash::make('password123'),
+    'rol_id' => 1,
+]);
+
+DB::table('usuarios')->insert([
+    'nombre' => 'Cliente',
+    'apellido_paterno' => 'Prueba',
+    'correo' => 'cliente@solare.com',
+    'contrasena' => Hash::make('password123'),
+    'rol_id' => 3,
+]);
+```
+
+**Test Credentials:**
+
+| Role | Email | Password |
+|------|-------|----------|
+| Administrador | `admin@solare.com` | `password123` |
+| Cliente | `cliente@solare.com` | `password123` |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Roles & Permissions" icon="users-gear" href="/architecture/roles-permissions">
+    Learn how RBAC controls access to resources
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/auth/login">
+    Detailed authentication endpoint documentation
+  </Card>
+</CardGroup>

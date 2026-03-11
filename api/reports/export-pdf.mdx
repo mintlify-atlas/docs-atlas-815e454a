@@ -1,0 +1,171 @@
+---
+title: "Export Sales Report PDF"
+api: "GET /api/reportes/ventas/pdf"
+description: "Generate and download an executive sales report in PDF format"
+---
+
+## Overview
+
+This endpoint generates a comprehensive PDF report containing all orders with their details, customer information, and total sales. The PDF is automatically downloaded with the filename `Reporte_Ventas_Solare.pdf`.
+
+The report includes:
+- Executive header with report title and generation date
+- Complete order listing with customer details
+- Product details for each order line item
+- Total sales summary
+
+## Authentication
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token for authentication. User must have one of the following roles:
+  - **Administrador**
+  - **Gerente**
+  - **Supervisor**
+</ParamField>
+
+## Response
+
+The endpoint returns a PDF file stream with the following headers:
+
+- `Content-Type: application/pdf`
+- `Content-Disposition: attachment; filename="Reporte_Ventas_Solare.pdf"`
+
+### PDF Contents
+
+The generated PDF includes the following data structure:
+
+<ResponseField name="titulo" type="string">
+  Report title: "Reporte Ejecutivo de Ventas - SOLARE"
+</ResponseField>
+
+<ResponseField name="fecha" type="string">
+  Report generation date in dd/mm/yyyy format
+</ResponseField>
+
+<ResponseField name="pedidos" type="array">
+  Complete list of all orders, ordered by creation date (most recent first)
+  
+  <Expandable title="array items">
+    <ResponseField name="id" type="number">
+      Order ID
+    </ResponseField>
+    
+    <ResponseField name="cliente" type="object">
+      Customer information with nested user data
+      
+      <Expandable title="properties">
+        <ResponseField name="usuario" type="object">
+          User account details (nombre, apellidos, correo)
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+    
+    <ResponseField name="detalles" type="array">
+      Order line items
+      
+      <Expandable title="array items">
+        <ResponseField name="variante" type="object">
+          Product variant with nested product information
+          
+          <Expandable title="properties">
+            <ResponseField name="producto" type="object">
+              Product details (nombre, descripcion, etc.)
+            </ResponseField>
+          </Expandable>
+        </ResponseField>
+        
+        <ResponseField name="cantidad" type="number">
+          Quantity ordered
+        </ResponseField>
+        
+        <ResponseField name="precio_unitario" type="number">
+          Unit price at time of order
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="total" type="number">
+  Grand total of all sales (sum of `cantidad * precio_unitario` from all order details)
+</ResponseField>
+
+## Example Request
+
+```bash
+curl -X GET https://api.solare.com/api/reportes/ventas/pdf \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Accept: application/pdf" \
+  -o Reporte_Ventas_Solare.pdf
+```
+
+## Example Request (Browser)
+
+```javascript
+fetch('https://api.solare.com/api/reportes/ventas/pdf', {
+  method: 'GET',
+  headers: {
+    'Authorization': 'Bearer YOUR_ACCESS_TOKEN',
+    'Accept': 'application/pdf'
+  }
+})
+.then(response => response.blob())
+.then(blob => {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'Reporte_Ventas_Solare.pdf';
+  a.click();
+});
+```
+
+## Error Responses
+
+### 401 Unauthorized
+
+```json
+{
+  "message": "Unauthenticated."
+}
+```
+
+### 403 Forbidden
+
+```json
+{
+  "message": "No tiene permisos para acceder a este recurso."
+}
+```
+
+Returned when the authenticated user does not have Administrador, Gerente, or Supervisor role.
+
+### 500 Internal Server Error
+
+```json
+{
+  "message": "Error al generar el reporte PDF",
+  "error": "View [reportes.ventas_pdf] not found."
+}
+```
+
+Returned if the PDF template view is missing. Ensure the view file exists at `resources/views/reportes/ventas_pdf.blade.php`.
+
+## Implementation Notes
+
+- Uses the DomPDF library (`barryvdh/laravel-dompdf`) for PDF generation
+- Requires a Blade view template at `resources/views/reportes/ventas_pdf.blade.php`
+- All orders are loaded with eager loading for optimal performance:
+  - `cliente.usuario` - Customer user account details
+  - `detalles.variante.producto` - Order items with full product information
+- Orders are sorted by `creado_en` in descending order (newest first)
+- Total is calculated as `SUM(cantidad * precio_unitario)` across all order details
+- Controller location: `app/Http/Controllers/Api/ReporteController.php:58`
+
+## PDF Template Requirements
+
+The Blade template should be created at `resources/views/reportes/ventas_pdf.blade.php` and will receive the following variables:
+
+- `$titulo` - Report title string
+- `$fecha` - Formatted date string
+- `$pedidos` - Eloquent collection of orders with relationships
+- `$total` - Numeric total of all sales
