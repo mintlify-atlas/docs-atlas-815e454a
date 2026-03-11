@@ -93,7 +93,7 @@ The generated PDF includes the following data structure:
 ## Example Request
 
 ```bash
-curl -X GET https://api.solare.com/api/reportes/ventas/pdf \
+curl -X GET http://127.0.0.1:8000/api/reportes/ventas/pdf \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Accept: application/pdf" \
   -o Reporte_Ventas_Solare.pdf
@@ -102,7 +102,7 @@ curl -X GET https://api.solare.com/api/reportes/ventas/pdf \
 ## Example Request (Browser)
 
 ```javascript
-fetch('https://api.solare.com/api/reportes/ventas/pdf', {
+fetch('http://127.0.0.1:8000/api/reportes/ventas/pdf', {
   method: 'GET',
   headers: {
     'Authorization': 'Bearer YOUR_ACCESS_TOKEN',

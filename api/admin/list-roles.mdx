@@ -59,7 +59,7 @@ Returns an array of all role objects.
 ## Example Request
 
 ```bash
-curl -X GET https://api.solare.com/api/admin/roles \
+curl -X GET http://127.0.0.1:8000/api/admin/roles \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Accept: application/json"
 ```
@@ -153,7 +153,7 @@ Returned when the authenticated user does not have the Administrador role.
 Use this endpoint to populate a role selection dropdown when creating employee accounts:
 
 ```javascript
-fetch('https://api.solare.com/api/admin/roles', {
+fetch('http://127.0.0.1:8000/api/admin/roles', {
   headers: {
     'Authorization': 'Bearer YOUR_ACCESS_TOKEN',
     'Accept': 'application/json'
